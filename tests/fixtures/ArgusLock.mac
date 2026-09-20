@@ -1,0 +1,12 @@
+ROUTINE ArgusLock [Type=MAC]
+ArgusLock ; Test-only, bounded lock fixture.
+ lock +^ArgusDemo("acceptance"):1
+ if '$test quit
+ hang 240
+ lock -^ArgusDemo("acceptance")
+ quit
+Waiter
+ hang 2
+ lock +^ArgusDemo("acceptance"):230
+ if $test lock -^ArgusDemo("acceptance")
+ quit

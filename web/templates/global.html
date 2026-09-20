@@ -1,0 +1,4 @@
+{% extends 'page.html' %}
+{% block content %}{{ super() }}
+{% if measure_token %}<section class="card"><h2>Collect an estimate</h2><p>Uses the stochastic estimate mode. No exact full scan runs on this page.</p><form method="post" action="{{ url_for('storage.measure') }}"><input type="hidden" name="namespace" value="{{ request.args['namespace'] }}"><input type="hidden" name="global" value="{{ request.args['global'] }}"><input type="hidden" name="token" value="{{ measure_token }}"><button>Estimate size now</button></form></section>{% endif %}
+{% endblock %}

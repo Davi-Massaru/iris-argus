@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25">
-  <Document name="dc-sample.ZPM">
+<Export generator="IRIS" version="26">
+  <Document name="argus-iris.ZPM">
     <Module>
-      <Name>dc-sample</Name>
-      <Version>2.0.11</Version>
-      <Description>Basic InterSystems IRIS Development Template</Description>
+      <Name>argus-iris</Name>
+      <Version>0.1.0</Version>
+      <Description>Argus IRIS operational investigation portal</Description>
       <Packaging>module</Packaging>
       <SourcesRoot>src</SourcesRoot>
-      <Resource Name="dc.sample.PKG"/>
-      <UnitTest Name="/tests" Package="dc.sample.unittests" Phase="test"/>
-
     </Module>
   </Document>
 </Export>

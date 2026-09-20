@@ -1,3 +1,9 @@
 **/.DS_Store
 iris-main.log
 .git
+.env
+.env.*
+!.env.example
+__pycache__
+.pytest_cache
+.venv

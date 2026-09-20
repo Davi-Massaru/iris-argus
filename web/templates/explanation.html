@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<p><a href="{{ url_for('history.incident_detail',identifier=incident.id) }}">← Return to preserved evidence</a></p>
+<div class="notice">{% if provider=='mock' %}Simulated mode. No API key, external requests or paid tokens are used.{% else %}Provider: {{ provider }}. Generating an explanation sends a limited incident summary to OpenAI and may incur charges. Raw process data and global contents are excluded.{% endif %}</div>
+{% if error %}<p class="card error">{{ error }}</p>{% endif %}
+{% if result %}<section class="card"><h2>{{ 'Simulated explanation' if result.provider=='mock' else 'AI explanation' }}</h2><pre>{{ result.text }}</pre><p class="muted">Evidence: {{ result.evidence_id }} · Advisory text; incident decisions remain deterministic.</p></section>{% endif %}
+<form method="post" class="card"><input type="hidden" name="token" value="{{ token }}"><label><input type="checkbox" name="confirm" value="yes" required> {{ 'Generate a simulated explanation' if provider=='mock' else 'Send the incident summary to the configured provider' }}</label><button type="submit">Generate explanation</button></form>
+{% endblock %}

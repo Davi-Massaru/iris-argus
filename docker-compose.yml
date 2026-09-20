@@ -1,14 +1,23 @@
+name: argus-iris
 services:
   iris:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: always
-    environment:
-      - ISC_CPF_MERGE_FILE=/home/irisowner/dev/merge.cpf
+    build: .
+    init: true
+    command: ["--check-caps", "false", "--after", "/opt/argus/scripts/startup.sh"]
     ports:
-      - 1972
-      - 52773
-      - 53773
+      - "127.0.0.1:52773:52773"
+    environment:
+      ARGUS_LLM_MODE: ${ARGUS_LLM_MODE:-auto}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ARGUS_LLM_MODEL: ${ARGUS_LLM_MODEL:-gpt-4.1-mini}
+      ARGUS_TIMEZONE: ${ARGUS_TIMEZONE:-America/Sao_Paulo}
     volumes:
-      - ./:/home/irisowner/dev
+      - argus-evidence:/usr/irissys/mgr/argus
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/argus-ready && iris qlist IRIS"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+volumes:
+  argus-evidence:

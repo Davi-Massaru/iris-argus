@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<p><a class="button" href="{{ url_for('intelligence.incident_explanation',identifier=incident.id) }}">Explain this incident</a></p>
+<nav class="tabs"><a href="{{ url_for('history.report',identifier=incident.id) }}">HTML report</a><a href="{{ url_for('history.report',identifier=incident.id,format='json') }}">Export JSON</a><a href="{{ url_for('history.report',identifier=incident.id,format='csv') }}">Export CSV</a></nav>
+<div class="metrics"><section class="card metric"><span>Status</span><strong>{{ incident.status }}</strong></section><section class="card metric"><span>Severity</span><strong>{{ incident.severity }}</strong></section><section class="card metric"><span>Affected processes</span><strong>{{ incident.impact }}</strong></section><section class="card metric"><span>Baseline confidence</span><strong>{{ incident.confidence }}</strong></section></div>
+<section class="card"><h2>Why this is an incident</h2><ul>{% for reason in incident.reasons %}<li>{{ reason }}</li>{% endfor %}</ul><p>Namespace: {{ incident.namespace }} · Resource: {{ incident.resource }}</p><p>Started: {{ incident.started_at|utc }} · Last seen: {{ incident.last_seen_at|utc }} · Resolved: {{ incident.resolved_at|utc }}</p></section>
+<section class="card"><h2>Preserved timeline</h2><p class="muted">Historical evidence remains available after the original processes or locks disappear.</p>{% for entry in incident.timeline %}<article><h3>{{ entry.captured_at|utc }} · {{ entry.decision }}</h3><ul>{% for reason in entry.reasons %}<li>{{ reason }}</li>{% endfor %}</ul><details><summary>Captured evidence</summary><pre>{{ entry.evidence|tojson(indent=2) }}</pre></details></article>{% endfor %}</section>
+{% endblock %}

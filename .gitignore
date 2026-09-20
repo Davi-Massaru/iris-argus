@@ -1,5 +1,11 @@
 .DS_Store
 iris-main.log
 .env
+.env.*
+!.env.example
 .git
 
+__pycache__/
+.pytest_cache/
+*.pyc
+.venv/

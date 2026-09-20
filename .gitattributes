@@ -1,11 +1,5 @@
-*.cls linguist-language=ObjectScript
-*.mac linguist-language=ObjectScript
-*.int linguist-language=ObjectScript
-*.inc linguist-language=ObjectScript
-*.csp linguist-language=Html
-
+* text=auto
 *.sh text eol=lf
-*.cls text eol=lf
-*.mac text eol=lf
-*.int text eol=lf
-Dockerfil* text eol=lf
+*.script text eol=lf
+*.cpf text eol=lf
+Dockerfile text eol=lf

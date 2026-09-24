@@ -1,1 +1,0 @@
-{"name":"Argus IRIS","dockerComposeFile":"../docker-compose.yml","service":"iris","workspaceFolder":"/opt/argus","customizations":{"vscode":{"settings":{"python.defaultInterpreterPath":"/usr/irissys/bin/irispython"}}}}

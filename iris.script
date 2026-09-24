@@ -1,6 +1,0 @@
-zn "%SYS"
-do ##class(Security.Users).UnExpireUserPasswords("*")
-zn "ARGUS"
-set runner=##class(%SYS.Python).Import("runpy")
-do runner."run_path"("/opt/argus/scripts/embedded_check.py")
-halt

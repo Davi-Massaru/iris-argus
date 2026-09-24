@@ -1,8 +1,0 @@
-[Actions]
-CreateResource:Name=%DB_ARGUS,Description="Argus operational evidence"
-CreateDatabase:Name=ARGUS,Directory=/usr/irissys/mgr/argus,Resource=%DB_ARGUS
-CreateNamespace:Name=ARGUS,Globals=ARGUS,Routines=ARGUS
-CreateApplication:Name=/argus,NameSpace=ARGUS,WSGIAppLocation=/opt/argus/python,WSGIAppName=argus.app,WSGICallable=app,Type=2,DispatchClass=%SYS.Python.WSGI,WSGIDebug=0,WSGIType=1,AutheEnabled=32
-
-[Startup]
-SystemMode=Argus IRIS

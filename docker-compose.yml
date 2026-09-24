@@ -1,23 +1,22 @@
 name: argus-iris
 services:
-  iris:
+  app:
     build: .
-    init: true
-    command: ["--check-caps", "false", "--after", "/opt/argus/scripts/startup.sh"]
     ports:
-      - "127.0.0.1:52773:52773"
-    environment:
-      ARGUS_LLM_MODE: ${ARGUS_LLM_MODE:-auto}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ARGUS_LLM_MODEL: ${ARGUS_LLM_MODEL:-gpt-4.1-mini}
-      ARGUS_TIMEZONE: ${ARGUS_TIMEZONE:-America/Sao_Paulo}
+      - "127.0.0.1:8000:8000"
+  ollama:
+    image: ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+    profiles: [local-llm]
+    ports:
+      - "127.0.0.1:11434:11434"
     volumes:
-      - argus-evidence:/usr/irissys/mgr/argus
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_NO_CLOUD: "1"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/argus-ready && iris qlist IRIS"]
-      interval: 15s
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 20
 volumes:
-  argus-evidence:
+  ollama-models:

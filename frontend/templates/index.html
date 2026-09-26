@@ -1,45 +1,172 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DBA Agents · IRIS</title><link rel="stylesheet" href="assets/style"></head>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>DBA Agents · IRIS</title>
+    <link rel="stylesheet" href="assets/style">
+</head>
+
 <body>
-<header class="topbar"><div><p class="eyebrow">IRIS · DIAGNOSTICS PLATFORM</p><h1>DBA Agents</h1></div><div class="identity">{{ principal.name }}<small>{{ principal.roles|join(', ') }}</small></div></header>
-<main>
-<section class="hero"><div><p class="eyebrow">YOUR ENVIRONMENT, YOUR INSTRUCTIONS</p><h2>Agents built by you.</h2><p>Configure tasks, choose tools, and review the evidence.</p></div><button id="new-agent">Create agent</button></section>
-<p id="notice" role="status" aria-live="polite"></p>
-<section class="panel"><div class="panel-heading"><div><p class="section-kicker">Workspace</p><h3>Registered agents <span id="agent-count">0</span></h3></div><div class="heading-actions"><button id="toggle-agents" class="secondary" type="button" aria-expanded="true"><span aria-hidden="true">⌃</span> Collapse</button><button id="refresh" class="secondary"><span aria-hidden="true">↻</span> Refresh</button></div></div><div id="agent-list" class="cards"><p>Loading...</p></div></section>
-<div class="modal-backdrop" id="editor-modal" hidden><section class="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-<div class="panel-heading"><h3 id="editor-title">Create agent</h3><button id="close-editor" class="secondary">Close</button></div>
-<form id="agent-form">
-<div class="form-grid"><label>Name<input id="name" required maxlength="120" placeholder="Agent name"></label><label>Model<input id="model" required maxlength="100" value="qwen2.5:3b"><small id="provider-note" class="provider-note">Provider: Ollama</small></label></div>
-<label>Agent instructions<textarea id="prompt" rows="3" maxlength="6000" required placeholder="Define the agent's role, context, and how it should report results."></textarea></label>
-<label>Task / skill<textarea id="task" rows="4" maxlength="6000" required placeholder="Describe what to query, which conditions to evaluate, and what report to produce."></textarea></label>
-<div class="form-grid"><label>Interval in seconds (0 = manual only)<input id="interval" type="number" min="0" max="86400" value="0" required></label><label class="check"><input id="enabled" type="checkbox" checked> Enabled</label></div>
-<fieldset class="tool-fieldset"><legend>Choose approved queries</legend>
-<p class="tool-intro">Search the reviewed SysAdmin API queries and select only the data your agent needs. You can assign up to 12 queries.</p>
-<div class="tool-method-guide" aria-label="HTTP method guide">
-<div><span class="method-badge get">GET</span><span>Usually retrieve data</span></div>
-<div><span class="method-badge post">POST</span><span>Submit data or invoke an operation</span></div>
-<div><span class="method-badge put">PUT / PATCH</span><span>Usually update data</span></div>
-<div><span class="method-badge delete">DELETE</span><span>Usually remove data</span></div>
-<div><span class="method-badge head">HEAD</span><span>Read headers only</span></div>
-</div>
-<p class="tool-policy"><strong>The HTTP method is a hint, not a safety guarantee.</strong> Read each operation's description and verify it is supported by your target IRIS release before enabling it.</p>
-<p class="tool-source"><a href="https://github.com/intersystems-community/sysadmin-api-specification/blob/master/mainspec_v2.json" target="_blank" rel="noopener noreferrer">View the SysAdmin API specification</a><span>Operation names, descriptions, and parameters below come from this contract.</span></p>
-<div class="tool-browser-toolbar">
-<label for="tool-search">Search approved queries<input id="tool-search" type="search" placeholder="Try locks, processes, /v2/task, or maxRows"></label>
-<div class="tool-selection-summary"><span id="tool-result-count" role="status" aria-live="polite">Loading approved queries...</span><span id="tool-selection-count" aria-live="polite">0 of 12 selected</span></div>
-</div>
-<div id="tool-picker" class="tool-list"></div>
-<p id="tool-empty" class="tool-empty" hidden>No approved queries match this search.</p>
-</fieldset>
-<div class="actions"><button type="submit" id="save-agent">Save agent</button><span>Instructions and configuration are stored in IRIS.</span></div>
-</form></section></div>
-<section class="panel"><div class="panel-heading"><div><p class="section-kicker">Activity</p><h3>Runs and reports</h3></div><div class="heading-actions"><span class="pill safe">Read-only</span><button id="toggle-runs" class="secondary" type="button" aria-expanded="true"><span aria-hidden="true">⌃</span> Collapse</button></div></div><div id="runs-content"><div class="table-wrap"><table><thead><tr><th><button class="sort-button" data-sort="agent_name" type="button">Agent <span>↕</span></button></th><th><button class="sort-button" data-sort="created_at" type="button">Started <span>↕</span></button></th><th><button class="sort-button" data-sort="state" type="button">Status <span>↕</span></button></th><th>Details</th></tr></thead><tbody id="run-list"></tbody></table></div><div id="run-pagination" class="pagination"></div></div></section>
-<div class="modal-backdrop" id="report-modal" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="report-title"><div class="panel-heading"><div><p class="section-kicker">Run details</p><h3 id="report-title">Report and evidence</h3></div><button id="close-detail" class="secondary" aria-label="Close report">✕ <span>Close</span></button></div><div id="report-body"></div></section></div>
-<details class="panel" id="tool-catalog"><summary>Tool availability and SysAdmin catalog — <span id="catalog-count">0</span> operations, <span id="catalog-available-count">0 enabled</span></summary>
-<p class="catalog-note">All operations start blocked. “Enabled” means this application authorizes assigned agents to call the operation automatically, including scheduled runs; it does not test endpoint health or target credentials. Verify the target release and permissions first. Arguments and results are stored as run evidence; recognized sensitive fields are redacted.</p>
-<div id="catalog-presets" class="catalog-presets" hidden><strong>Quick presets</strong><span>Reviewed reads are enabled by default on first startup. Use these actions to restore that set or block every operation.</span><div class="catalog-preset-actions"><button id="enable-reviewed-reads" type="button" class="secondary">Enable reviewed reads (<span id="reviewed-read-count">0</span>)</button><button id="block-all-tools" type="button" class="secondary">Block all</button></div></div>
-<label class="catalog-search" for="catalog-search">Find an operation<input id="catalog-search" type="search" placeholder="Search method, path, or description"></label>
-<div class="table-wrap"><table><thead><tr><th>Method</th><th>Operation</th><th>Description</th><th>Status</th><th>DBA control</th></tr></thead><tbody id="catalog-list"></tbody></table></div></details>
-</main><script src="assets/script" defer></script></body></html>
+    <header class="topbar">
+        <div>
+            <p class="eyebrow">IRIS · DIAGNOSTICS PLATFORM</p>
+            <h1>DBA Agents</h1>
+        </div>
+        <div class="identity">{{ principal.name }}</div>
+    </header>
+    <main>
+        <section class="hero">
+            <div>
+                <p class="eyebrow">YOUR ENVIRONMENT, YOUR INSTRUCTIONS</p>
+                <h2>Agents built by you.</h2>
+                <p>Configure tasks, choose tools, and review the evidence.</p>
+            </div><button id="new-agent">Create agent</button>
+        </section>
+        <p id="notice" role="status" aria-live="polite"></p>
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-kicker">Workspace</p>
+                    <h3>Registered agents <span id="agent-count">0</span></h3>
+                </div>
+                <div class="heading-actions"><button id="toggle-agents" class="secondary" type="button"
+                        aria-expanded="true"><span aria-hidden="true">⌃</span> Collapse</button><button id="refresh"
+                        class="secondary"><span aria-hidden="true">↻</span> Refresh</button></div>
+            </div>
+            <div id="agent-list" class="cards">
+                <p>Loading...</p>
+            </div>
+        </section>
+        <div class="modal-backdrop" id="editor-modal" hidden>
+            <section class="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+                <div class="panel-heading">
+                    <h3 id="editor-title">Create agent</h3><button id="close-editor" class="secondary">Close</button>
+                </div>
+                <form id="agent-form">
+                    <div class="form-grid"><label>Name<input id="name" required maxlength="120"
+                                placeholder="Agent name"></label><label>Model<input id="model" required maxlength="100"
+                                value="qwen2.5:3b"><small id="provider-note" class="provider-note">Provider:
+                                Ollama</small></label></div>
+                    <label>Agent instructions<textarea id="prompt" rows="3" maxlength="6000" required
+                            placeholder="Define the agent's role, context, and how it should report results."></textarea></label>
+                    <label>Task / skill<textarea id="task" rows="4" maxlength="6000" required
+                            placeholder="Describe what to query, which conditions to evaluate, and what report to produce."></textarea></label>
+                    <div class="form-grid"><label>Interval in seconds (0 = manual only)<input id="interval"
+                                type="number" min="0" max="86400" value="0" required></label><label class="check"><input
+                                id="enabled" type="checkbox" checked> Enabled</label></div>
+                    <fieldset class="tool-fieldset">
+                        <legend>Choose approved queries</legend>
+                        <p class="tool-intro">Search the reviewed SysAdmin API queries and select only the data your
+                            agent needs. You can assign up to 12 queries.</p>
+                        <div class="tool-method-guide" aria-label="HTTP method guide">
+                            <div><span class="method-badge get">GET</span><span>Usually retrieve data</span></div>
+                            <div><span class="method-badge post">POST</span><span>Submit data or invoke an
+                                    operation</span></div>
+                            <div><span class="method-badge put">PUT / PATCH</span><span>Usually update data</span></div>
+                            <div><span class="method-badge delete">DELETE</span><span>Usually remove data</span></div>
+                            <div><span class="method-badge head">HEAD</span><span>Read headers only</span></div>
+                        </div>
+                        <p class="tool-policy"><strong>The HTTP method is a hint, not a safety guarantee.</strong> Read
+                            each operation's description and verify it is supported by your target IRIS release before
+                            enabling it.</p>
+                        <p class="tool-source"><a
+                                href="https://github.com/intersystems-community/sysadmin-api-specification/blob/master/mainspec_v2.json"
+                                target="_blank" rel="noopener noreferrer">View the SysAdmin API
+                                specification</a><span>Operation names, descriptions, and parameters below come from
+                                this contract.</span></p>
+                        <div class="tool-browser-toolbar">
+                            <label for="tool-search">Search approved queries<input id="tool-search" type="search"
+                                    placeholder="Try locks, processes, /v2/task, or maxRows"></label>
+                            <div class="tool-selection-summary"><span id="tool-result-count" role="status"
+                                    aria-live="polite">Loading approved queries...</span><span id="tool-selection-count"
+                                    aria-live="polite">0 of 12 selected</span></div>
+                        </div>
+                        <div id="tool-picker" class="tool-list"></div>
+                        <p id="tool-empty" class="tool-empty" hidden>No approved queries match this search.</p>
+                    </fieldset>
+                    <div class="actions"><button type="submit" id="save-agent">Save agent</button><span>Instructions and
+                            configuration are stored in IRIS.</span></div>
+                </form>
+            </section>
+        </div>
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-kicker">Activity</p>
+                    <h3>Runs and reports</h3>
+                </div>
+                <div class="heading-actions"><span class="pill safe">Read-only</span><button id="toggle-runs"
+                        class="secondary" type="button" aria-expanded="true"><span aria-hidden="true">⌃</span>
+                        Collapse</button></div>
+            </div>
+            <div id="runs-content">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><button class="sort-button" data-sort="agent_name" type="button">Agent
+                                        <span>↕</span></button></th>
+                                <th><button class="sort-button" data-sort="created_at" type="button">Started
+                                        <span>↕</span></button></th>
+                                <th><button class="sort-button" data-sort="state" type="button">Status
+                                        <span>↕</span></button></th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="run-list"></tbody>
+                    </table>
+                </div>
+                <div id="run-pagination" class="pagination"></div>
+            </div>
+        </section>
+        <div class="modal-backdrop" id="report-modal" hidden>
+            <section class="modal" role="dialog" aria-modal="true" aria-labelledby="report-title">
+                <div class="panel-heading">
+                    <div>
+                        <p class="section-kicker">Run details</p>
+                        <h3 id="report-title">Report and evidence</h3>
+                    </div><button id="close-detail" class="secondary" aria-label="Close report">✕
+                        <span>Close</span></button>
+                </div>
+                <div id="report-body"></div>
+            </section>
+        </div>
+        <details class="panel" id="tool-catalog">
+            <summary>Tool availability and SysAdmin catalog — <span id="catalog-count">0</span> operations, <span
+                    id="catalog-available-count">0 enabled</span></summary>
+            <p class="catalog-note">All operations start blocked. “Enabled” means this application authorizes assigned
+                agents to call the operation automatically, including scheduled runs; it does not test endpoint health
+                or target credentials. Verify the target release and permissions first. Arguments and results are stored
+                as run evidence; recognized sensitive fields are redacted.</p>
+            <div id="catalog-presets" class="catalog-presets" hidden><strong>Quick presets</strong><span>Reviewed reads
+                    are enabled by default on first startup. Use these actions to restore that set or block every
+                    operation.</span>
+                <div class="catalog-preset-actions"><button id="enable-reviewed-reads" type="button"
+                        class="secondary">Enable reviewed reads (<span
+                            id="reviewed-read-count">0</span>)</button><button id="block-all-tools" type="button"
+                        class="secondary">Block all</button></div>
+            </div>
+            <label class="catalog-search" for="catalog-search">Find an operation<input id="catalog-search" type="search"
+                    placeholder="Search method, path, or description"></label>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Operation</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>DBA control</th>
+                        </tr>
+                    </thead>
+                    <tbody id="catalog-list"></tbody>
+                </table>
+            </div>
+        </details>
+    </main>
+    <script src="assets/script" defer></script>
+</body>
+
+</html>

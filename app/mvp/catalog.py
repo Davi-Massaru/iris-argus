@@ -138,8 +138,18 @@ def _input_schema(path, method, path_item, operation, document):
         if not isinstance(body_schema, dict):
             supported = False
         else:
+            body_description = str(body_schema.get("description", ""))
+            if method == "POST" and body_description.startswith("All fields are required"):
+                body_schema = {
+                    **body_schema,
+                    "required": [
+                        name for name in body_schema.get("properties", {}) if name != "Settings"
+                    ],
+                }
             schema["properties"]["body"] = body_schema
-            if request_body.get("required"):
+            if request_body.get("required") or (
+                method == "POST" and body_description.startswith("All fields are required")
+            ):
                 schema["required"].append("body")
     return schema, supported
 

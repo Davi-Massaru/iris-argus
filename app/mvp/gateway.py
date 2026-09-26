@@ -13,6 +13,14 @@ class ToolError(ValueError):
     pass
 
 
+TASK_CREATE_DEFAULTS = {
+    "StartDate": "",
+    "EndDate": "",
+    "SuspendOnError": False,
+    "SuspendTerminated": False,
+}
+
+
 def _enabled_in_registry(item):
     rows = _rows(
         "SELECT Enabled FROM Agentic.AI_TOOL_VERSION WHERE StableKey = ? AND ContractHash = ?",
@@ -27,6 +35,10 @@ def _request_parameters(item, fixed, arguments):
     if any(key in arguments and arguments[key] != value for key, value in fixed.items()):
         raise ToolError("FIXED_PARAMETER_OVERRIDE")
     params = {**arguments, **fixed}
+    if item["method"] == "POST" and item["path"] == "/v2/task":
+        body = params.get("body")
+        if isinstance(body, dict):
+            params["body"] = {**TASK_CREATE_DEFAULTS, **body}
     if list(Draft7Validator(item["schema"]).iter_errors(params)):
         raise ToolError("INVALID_ARGUMENTS")
     if len(json.dumps(params)) > 3500:

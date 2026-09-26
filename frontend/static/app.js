@@ -1,6 +1,6 @@
 const prefix = window.location.pathname.replace(/\/$/, "");
-const $ = id => document.getElementById(id);
-let token = "", agents = [], catalog = [], editing = null, permissions = [], detailId = null, provider = "ollama";
+const $ = id => document.getElementById(id) || (id === "editor" ? document.getElementById("editor-modal") : null);
+let token = "", agents = [], catalog = [], editing = null, permissions = [], detailId = null, provider = "ollama", agentsExpanded = true, runsExpanded = true, runs = [], runPage = 1, runSort = "created_at", runDirection = "desc";
 const states = {QUEUED:"Queued",RUNNING:"Running",SUCCEEDED:"Succeeded",PARTIAL:"Partial",FAILED:"Failed",CANCELLED:"Cancelled"};
 function notify(message, error=false) { $("notice").textContent=message; $("notice").className=error?"error":""; }
 async function api(path, method="GET", data) {
@@ -118,14 +118,18 @@ function renderAgents(){
   $("agent-list").replaceChildren();
   if(!agents.length) $("agent-list").append(node("p","No agents registered. Create your first agent with custom instructions and tools."));
   for(const a of agents){
-    const card=node("article", "", "agent-card"); card.append(node("h4",a.name),node("p",a.task),node("small",(a.enabled?"Enabled":"Paused")+" · "+(a.interval_seconds?"Every "+a.interval_seconds+"s":"Manual")+" · "+a.tools.length+" tools · "+effectiveModel(a)));
+    const card=node("article", "", "agent-card");
+    const top=node("div","","agent-card-top"), title=node("div","","agent-title");
+    title.append(node("span",a.enabled?"●":"●",a.enabled?"agent-status active":"agent-status paused"),node("h4",a.name));
+    top.append(title,node("span",a.enabled?"Enabled":"Paused",a.enabled?"status-label enabled":"status-label paused"));
+    card.append(top,node("p",a.task),node("small",(a.interval_seconds?"⏱ Every "+a.interval_seconds+"s":"⏱ Manual")+"  ·  ◈ "+a.tools.length+" tools  ·  ◉ "+effectiveModel(a)));
     const actions=node("div","","actions");
-    actions.append(button("Edit",()=>openEditor(a),!canDesign()),button(a.active_run?"Run pending":"Run now",async()=>{await api("/api/mvp/agents/"+a.id+"/runs","POST",{});notify("Run added to the queue.");await refresh();},!canRun()||!a.enabled||!!a.active_run),button(a.enabled?"Pause":"Enable",async()=>{await api("/api/mvp/agents/"+a.id,"PUT",{...a,enabled:!a.enabled});notify("Configuration updated. Runs already in progress may finish.");await refresh();},!canDesign()));
+    actions.append(button("✎  Edit",()=>openEditor(a),!canDesign()),button(a.active_run?"◷  Run pending":"▶  Run now",async()=>{await api("/api/mvp/agents/"+a.id+"/runs","POST",{});notify("Run added to the queue.");await refresh();},!canRun()||!a.enabled||!!a.active_run),button(a.enabled?"Ⅱ  Pause":"▶  Enable",async()=>{await api("/api/mvp/agents/"+a.id,"PUT",{...a,enabled:!a.enabled});notify("Configuration updated. Runs already in progress may finish.");await refresh();},!canDesign()));
     card.append(actions);$("agent-list").append(card);
   }
 }
 function openEditor(agent=null){
-  editing=agent;$("editor").hidden=false;$("editor-title").textContent=agent?"Edit agent":"Create agent";
+  editing=agent;$("editor-modal").hidden=false;document.body.classList.add("modal-open");$("editor-title").textContent=agent?"Edit agent":"Create agent";
   for(const field of ["name","prompt","task"])$(field).value=agent?.[field]||"";
   $("model").value=agent?effectiveModel(agent):$("model").dataset.default||"qwen2.5:3b";
   $("interval").value=agent?.interval_seconds||0;$("enabled").checked=agent?.enabled??true;
@@ -153,23 +157,42 @@ $("agent-form").addEventListener("submit",async event=>{
   }catch(e){notify(e.message,true);}finally{$("save-agent").disabled=false;}
 });
 async function showRun(id){
-  detailId=id;const r=await api("/api/mvp/runs/"+id);$("run-detail").hidden=false;
+  detailId=id;const r=await api("/api/mvp/runs/"+id);$("report-modal").hidden=false;document.body.classList.add("modal-open");
   const body=$("report-body");body.replaceChildren(node("p",(states[r.state]||r.state)+" · "+r.snapshot.name+" · revision "+r.snapshot.revision));
   if(r.error)body.append(node("p","Error: "+r.error,"error"));
   body.append(node("pre",r.report||"No report available yet."));
   const instructions=document.createElement("details");instructions.append(node("summary","Instructions used"),node("pre",r.snapshot.prompt+"\n\n"+r.snapshot.task));body.append(instructions);
   for(const call of r.calls){const d=document.createElement("details");d.append(node("summary",call.tool+" · "+call.outcome+" · "+call.id),node("pre",JSON.stringify({arguments:call.arguments,result:call.result},null,2)));body.append(d);}
 }
-async function refresh(){
-  const [a,r]=await Promise.all([api("/api/mvp/agents"),api("/api/mvp/runs")]);agents=a.items;renderAgents();$("run-list").replaceChildren();
-  if(!r.items.length){const row=node("tr","");const cell=node("td","No runs recorded.");cell.colSpan=4;row.append(cell);$("run-list").append(row);}
-  for(const run of r.items){const row=node("tr","");row.append(node("td",run.agent_name),node("td",new Date(run.created_at).toLocaleString("en-US")),node("td",states[run.state]||run.state));const cell=node("td","");cell.append(button("View report",()=>showRun(run.id)));row.append(cell);$("run-list").append(row);}
-  if(detailId)await showRun(detailId);
+function renderRuns(){
+  const sorted=[...runs].sort((a,b)=>{let av=a[runSort]||"",bv=b[runSort]||"";if(runSort==="created_at"){av=new Date(av).getTime();bv=new Date(bv).getTime();}else{av=String(av).toLowerCase();bv=String(bv).toLowerCase();}return (av>bv?1:av<bv?-1:0)*(runDirection==="asc"?1:-1);});
+  const totalPages=Math.max(1,Math.ceil(sorted.length/10));runPage=Math.min(runPage,totalPages);
+  const page=sorted.slice((runPage-1)*10,runPage*10);$("run-list").replaceChildren();
+  if(!page.length){const row=node("tr","");const cell=node("td","No runs recorded.");cell.colSpan=4;row.append(cell);$("run-list").append(row);}
+  for(const run of page){const row=node("tr","");const status=String(run.state).toLowerCase();const statusIcons={succeeded:"✓",partial:"⚠",failed:"✕"};const statusCell=node("td","","run-status "+status);if(statusIcons[status])statusCell.append(node("span",statusIcons[status],"status-icon"),document.createTextNode(" "));statusCell.append(document.createTextNode(states[run.state]||run.state));row.append(node("td",run.agent_name),node("td",new Date(run.created_at).toLocaleString("en-US")),statusCell,node("td",""));row.lastChild.append(button("View report",()=>showRun(run.id)));$("run-list").append(row);}
+  const pagination=$("run-pagination");pagination.replaceChildren();if(totalPages>1){pagination.append(button("‹ Previous",()=>{runPage--;renderRuns();},runPage===1),node("span",`Page ${runPage} of ${totalPages}`),button("Next ›",()=>{runPage++;renderRuns();},runPage===totalPages));}
+  document.querySelectorAll(".sort-button").forEach(btn=>{btn.classList.toggle("active",btn.dataset.sort===runSort);btn.querySelector("span").textContent=btn.dataset.sort===runSort?(runDirection==="asc"?"↑":"↓"):"↕";});
 }
-$("new-agent").addEventListener("click",()=>openEditor());$("close-editor").addEventListener("click",()=>$("editor").hidden=true);$("close-detail").addEventListener("click",()=>{$("run-detail").hidden=true;detailId=null;});$("refresh").addEventListener("click",()=>refresh().catch(e=>notify(e.message,true)));
+async function refresh(options={}){
+  if(options.background&&(!$('editor-modal').hidden||detailId))return;
+  const [a,r]=await Promise.all([api("/api/mvp/agents"),api("/api/mvp/runs")]);agents=a.items;runs=r.items;renderAgents();renderRuns();
+  if(detailId&&!options.background)await showRun(detailId);
+}
+$("new-agent").addEventListener("click",()=>openEditor());$("close-editor").addEventListener("click",()=>$("editor").hidden=true);$("refresh").addEventListener("click",()=>refresh().catch(e=>notify(e.message,true)));
+function closeEditor(){ $("editor-modal").hidden=true; document.body.classList.remove("modal-open"); }
+$("close-editor").addEventListener("click",closeEditor);
+$("editor-modal").addEventListener("click",event=>{if(event.target===$("editor-modal"))closeEditor();});
+function closeReport(){ $("report-modal").hidden=true; detailId=null; document.body.classList.remove("modal-open"); }
+$("close-detail").addEventListener("click",closeReport);
+$("report-modal").addEventListener("click",event=>{if(event.target===$("report-modal"))closeReport();});
+document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("report-modal").hidden)closeReport();});
+$("toggle-agents").addEventListener("click",()=>{agentsExpanded=!agentsExpanded;$("agent-list").hidden=!agentsExpanded;$("toggle-agents").setAttribute("aria-expanded",String(agentsExpanded));$("toggle-agents").innerHTML=agentsExpanded?"<span aria-hidden=\"true\">⌃</span> Collapse":"<span aria-hidden=\"true\">⌄</span> Expand";});
+$("toggle-runs").addEventListener("click",()=>{runsExpanded=!runsExpanded;$("runs-content").hidden=!runsExpanded;$("toggle-runs").setAttribute("aria-expanded",String(runsExpanded));$("toggle-runs").innerHTML=runsExpanded?"<span aria-hidden=\"true\">⌃</span> Collapse":"<span aria-hidden=\"true\">⌄</span> Expand";});
+document.querySelectorAll(".sort-button").forEach(btn=>btn.addEventListener("click",()=>{if(runSort===btn.dataset.sort)runDirection=runDirection==="asc"?"desc":"asc";else{runSort=btn.dataset.sort;runDirection="asc";}runPage=1;renderRuns();}));
 async function init(){
   const session=await api("/api/v1/session");token=session.csrf_token;permissions=session.roles;$("new-agent").disabled=!canDesign();$("catalog-presets").hidden=!canManageTools();
   await loadCatalog();
-  await refresh();setInterval(()=>refresh().catch(e=>notify(e.message,true)),5000);
+  await refresh();
+  setInterval(()=>refresh({background:true}).catch(e=>notify(e.message,true)),15000);
 }
 init().catch(e=>notify(e.message,true));

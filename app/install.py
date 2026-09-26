@@ -17,6 +17,39 @@ from app.tools.importer import load_contract
 ROOT = Path("/opt/agentic")
 CSRF_KEY = Path("/usr/irissys/mgr/agentic/csrf.key")
 WORKER_CREDENTIAL = CSRF_KEY.with_name("worker-credential.json")
+DEMO_TASK_CLASS = ROOT / "iris" / "Agentic" / "Demo" / "EmailTask.cls"
+SYSADMIN_ROLES = "AgenticSysAdminReader,AgenticTaskRunner,%All"
+
+
+def _compile_demo_task() -> None:
+    import iris
+
+    status = iris.cls("%SYSTEM.OBJ").Load(str(DEMO_TASK_CLASS), "ck")
+    if status != 1:
+        raise RuntimeError("Cannot compile Agentic.Demo.EmailTask")
+
+
+def _configure_sysadmin_identity(iris, credential) -> None:
+    user_ref = iris.ref(None)
+    if not iris.cls("Security.Users").Exists(credential["username"], user_ref):
+        status = iris.cls("Security.Users").Create(
+            credential["username"],
+            SYSADMIN_ROLES,
+            credential["password"],
+            "MVP SysAdmin gateway identity",
+            "%SYS",
+            "",
+            "",
+            0,
+            1,
+        )
+        if status != 1:
+            raise RuntimeError("Cannot create SysAdmin identity")
+        return
+    user = user_ref.value
+    user.Roles = SYSADMIN_ROLES
+    if user._Save() != 1:
+        raise RuntimeError("Cannot update SysAdmin identity roles")
 
 
 def _configure_worker():
@@ -79,6 +112,8 @@ def _configure_mvp_security():
             ("AgenticOperator", "%DB_AGENTIC:RW"),
             ("AgenticDBAApprover", "%DB_AGENTIC:RW"),
             ("AgenticSysAdminReader", "%Admin_Operate:U"),
+            ("AgenticTaskRunner", "%Admin_Task:U"),
+            ("AgenticSystemReader", "%DB_IRISSYS:R"),
         ]:
             if not iris.cls("Security.Roles").Exists(name, iris.ref(None)):
                 status = iris.cls("Security.Roles").Create(name, "Agentic MVP role", resource, "")
@@ -92,20 +127,7 @@ def _configure_mvp_security():
                     {"username": "AgenticSysAdmin", "password": secrets.token_urlsafe(18)}, output
                 )
         credential = json.loads(path.read_text())
-        if not iris.cls("Security.Users").Exists(credential["username"], iris.ref(None)):
-            status = iris.cls("Security.Users").Create(
-                credential["username"],
-                "AgenticSysAdminReader",
-                credential["password"],
-                "MVP SysAdmin gateway identity",
-                "%SYS",
-                "",
-                "",
-                0,
-                1,
-            )
-            if status != 1:
-                raise RuntimeError("Cannot create SysAdmin identity")
+        _configure_sysadmin_identity(iris, credential)
     finally:
         iris.system.Process.SetNamespace(previous)
     for role in ("AgenticViewer", "AgenticAgentDesigner", "AgenticOperator"):
@@ -271,6 +293,7 @@ def setup() -> None:
             with os.fdopen(descriptor, "wb") as output:
                 output.write(secrets.token_bytes(32))
         _migrate()
+        _compile_demo_task()
         _configure_worker()
         _configure_mvp_security()
         count = _import_contract()

@@ -276,6 +276,14 @@ def test_gateway_dispatches_json_body_and_accepts_created_response(monkeypatch):
     assert gateway.execute(operation["key"], arguments) == {"created": True}
 
 
+def test_task_create_schema_requires_contract_declared_fields():
+    operation = tool_by_key("post_v2_task")
+    body = operation["schema"]["properties"]["body"]
+
+    assert operation["schema"]["required"] == ["body"]
+    assert set(body["required"]) == set(body["properties"]) - {"Settings"}
+
+
 def test_gateway_rechecks_availability_before_each_call():
     status = {"enabled": True}
     gateway = Gateway(config()["tools"], availability_lookup=lambda _item: status["enabled"])

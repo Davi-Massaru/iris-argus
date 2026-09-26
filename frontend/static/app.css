@@ -10,7 +10,8 @@
     --cyan: #00a6c8;
     --amber: #9a5b00;
     --red: #b42318;
-    font-family: "Aptos", "Segoe UI", sans-serif
+    font-family: "Aptos", "Segoe UI", sans-serif;
+    --shadow: 0 10px 30px #18364a12
 }
 
 * {
@@ -178,6 +179,8 @@ main {
     font-size: 16px;
     font-weight: 650
 }
+.section-kicker { margin: 0 0 4px; color: var(--brand); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700 }
+.heading-actions { display: flex; gap: 8px; align-items: center }
 
 .pill {
     font-size: 11px;
@@ -289,6 +292,8 @@ button.secondary:hover:not(:disabled) {
     background: #edf5f8;
     border-color: #8baebf
 }
+button { transition: background .18s ease, transform .18s ease, box-shadow .18s ease }
+button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 10px #07527a20 }
 
 button:focus-visible,
 input:focus-visible,
@@ -303,10 +308,19 @@ textarea:focus-visible {
 }
 
 .agent-card {
-    padding: 18px 0;
+    padding: 20px 0;
     border-bottom: 1px solid var(--line);
     min-width: 0
 }
+.agent-card-top, .agent-title { display: flex; align-items: center; gap: 10px }
+.agent-card-top { justify-content: space-between; gap: 16px }
+.agent-card h4 { margin: 0; }
+.agent-status { font-size: 14px; line-height: 1; color: var(--muted) }
+.agent-status.active { color: #14936b }
+.agent-status.paused { color: #b97812 }
+.status-label { border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700 }
+.status-label.enabled { color: #17614e; background: #eaf8f4 }
+.status-label.paused { color: #794600; background: #fff8e9 }
 
 .agent-card h4 {
     margin: 0 0 12px;
@@ -801,6 +815,26 @@ pre {
     border-radius: 4px
 }
 
+.modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px; background: #102b3a80; backdrop-filter: blur(3px) }
+.modal { width: min(920px, 100%); max-height: min(88vh, 820px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 70px #102b3a40; animation: modal-in .18s ease-out }
+.editor-modal { max-height: 92vh; }
+.modal .panel-heading { position: sticky; top: 0; z-index: 1 }
+.modal-open { overflow: hidden }
+@keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.99) } to { opacity: 1; transform: translateY(0) scale(1) } }
+.sort-button { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: inherit; font-weight: 650; }
+.sort-button:hover:not(:disabled) { background: transparent; color: var(--brand); box-shadow: none; transform: none; }
+.sort-button.active { color: var(--brand-deep); }
+.run-status { font-size: 13px; font-weight: 750; white-space: nowrap; }
+.status-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 5px; border-radius: 50%; font-size: 14px; font-weight: 800; line-height: 1; vertical-align: -2px; }
+.run-status.succeeded { color: #16805d; }
+.run-status.succeeded .status-icon { color: #fff; background: #16805d; }
+.run-status.partial { color: #a66a00; }
+.run-status.partial .status-icon { color: #fff; background: #c28516; }
+.run-status.failed { color: var(--red); }
+.run-status.failed .status-icon { color: #fff; background: var(--red); }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px; color: var(--muted); font-size: 12px; }
+.pagination button { padding: 7px 11px; font-size: 12px; }
+
 summary {
     cursor: pointer;
     padding: 20px;
@@ -909,6 +943,10 @@ summary {
     main {
         padding: 22px 16px 36px
     }
+
+    .heading-actions button { padding: 9px 10px; font-size: 12px }
+    .heading-actions button span { display: none }
+    .modal-backdrop { padding: 10px }
 
     th,
     td {

@@ -52,7 +52,9 @@ def _validate_refs(value: Any, document: dict[str, Any]) -> None:
             _validate_refs(item, document)
 
 
-def _merge_parameters(path_parameters: list[dict[str, Any]], operation_parameters: list[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
+def _merge_parameters(
+    path_parameters: list[dict[str, Any]], operation_parameters: list[dict[str, Any]]
+) -> tuple[dict[str, Any], ...]:
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     unresolved: list[dict[str, Any]] = []
     for parameter in [*path_parameters, *operation_parameters]:
@@ -91,7 +93,9 @@ def load_contract(path: Path) -> ImportedContract:
                     method=normalized_method,
                     path=route,
                     summary=str(operation.get("summary", "")),
-                    parameters=_merge_parameters(path_parameters, list(operation.get("parameters", []))),
+                    parameters=_merge_parameters(
+                        path_parameters, list(operation.get("parameters", []))
+                    ),
                     request_body=operation.get("requestBody"),
                     responses=dict(operation.get("responses", {})),
                     security=tuple(operation.get("security", default_security)),

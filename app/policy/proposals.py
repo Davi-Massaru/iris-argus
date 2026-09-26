@@ -11,7 +11,9 @@ CANONICALIZATION_VERSION = "agentic-json-v1"
 
 
 def canonical_json(value: Any) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
 
 
 def action_hash(envelope: dict[str, Any]) -> str:
@@ -30,7 +32,16 @@ class ProposalDecision:
     reason: str
 
     @classmethod
-    def create(cls, *, proposal_id: str, revision: int, expected_hash: str, actor: str, decision: str, reason: str = ""):
+    def create(
+        cls,
+        *,
+        proposal_id: str,
+        revision: int,
+        expected_hash: str,
+        actor: str,
+        decision: str,
+        reason: str = "",
+    ):
         if decision not in {"APPROVED", "REJECTED"}:
             raise ValueError("Unsupported decision")
         return cls(

@@ -1,9 +1,11 @@
 """Bounded restart supervision for the Embedded Python worker."""
+
 import signal
 import subprocess
 import time
 import json
 import os
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -14,9 +16,13 @@ running = True
 
 
 def worker_environment():
-    credential = json.loads(Path('/usr/irissys/mgr/agentic/worker-credential.json').read_text())
-    return dict(os.environ, IRISUSERNAME=credential['username'],
-                IRISPASSWORD=credential['password'], IRISNAMESPACE='AGENTIC')
+    credential = json.loads(Path("/usr/irissys/mgr/agentic/worker-credential.json").read_text())
+    return dict(
+        os.environ,
+        IRISUSERNAME=credential["username"],
+        IRISPASSWORD=credential["password"],
+        IRISNAMESPACE="AGENTIC",
+    )
 
 
 def stop(*_args):
@@ -33,22 +39,23 @@ def main():
     failures = 0
     while running and failures < 5:
         HEARTBEAT.unlink(missing_ok=True)
-        child = subprocess.Popen(["/usr/irissys/bin/irispython", str(ROOT / "main.py")],
-                                 env=worker_environment(), stdin=subprocess.DEVNULL,
-                                 start_new_session=True)
+        child = subprocess.Popen(
+            ["/usr/irissys/bin/irispython", str(ROOT / "main.py")],
+            env=worker_environment(),
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         result = child.wait()
         # A crashed worker may have left a model runner behind. Fence it before
         # recovery releases any durable agent execution slot.
-        try:
+        with suppress(ProcessLookupError):
             os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
         HEARTBEAT.unlink(missing_ok=True)
         if not running or result == 0:
             break
         failures += 1
         print(f"Worker exited; restart attempt {failures}/5", flush=True)
-        time.sleep(min(2 ** failures, 30))
+        time.sleep(min(2**failures, 30))
     if running and failures == 5:
         raise SystemExit(1)
 

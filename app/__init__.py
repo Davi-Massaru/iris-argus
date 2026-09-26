@@ -10,7 +10,9 @@ from app.repositories.iris_repository import IRISRepository
 
 
 def create_app(repository=None, *, testing: bool = False) -> Flask:
-    app = Flask(__name__, static_folder="../frontend/static", template_folder="../frontend/templates")
+    app = Flask(
+        __name__, static_folder="../frontend/static", template_folder="../frontend/templates"
+    )
     app.config.update(TESTING=testing, MAX_CONTENT_LENGTH=1_048_576)
     if testing:
         app.config["AGENTIC_CSRF_SECRET"] = b"test-only-csrf-secret"

@@ -39,10 +39,11 @@ def current_principal() -> Principal:
     else:
         try:
             import iris
+
             # WSGI runs in the authenticated IRIS context. Process.UserName()
             # reports the OS account in this release, not the browser principal.
-            name = str(iris.execute('return $username'))
-            native_roles = set(str(iris.execute('return $roles')).split(','))
+            name = str(iris.execute("return $username"))
+            native_roles = set(str(iris.execute("return $roles")).split(","))
         except Exception:
             pass  # Fail closed when the IRIS security context cannot be read.
     if name.upper() == "UNKNOWNUSER":
@@ -61,9 +62,19 @@ def require_permission(permission: str):
         def wrapped(*args, **kwargs):
             principal = current_principal()
             if not principal.name:
-                return jsonify(error={"code": "AUTHENTICATION_REQUIRED", "message": "Authentication is required."}), 401
+                return jsonify(
+                    error={
+                        "code": "AUTHENTICATION_REQUIRED",
+                        "message": "Authentication is required.",
+                    }
+                ), 401
             if not principal.permits(permission):
-                return jsonify(error={"code": "FORBIDDEN", "message": "The authenticated user lacks this permission."}), 403
+                return jsonify(
+                    error={
+                        "code": "FORBIDDEN",
+                        "message": "The authenticated user lacks this permission.",
+                    }
+                ), 403
             return function(*args, **kwargs)
 
         return wrapped
@@ -86,7 +97,12 @@ def require_csrf(function):
         supplied = request.headers.get("X-Agentic-CSRF", "")
         expected = csrf_token(current_principal())
         if not hmac.compare_digest(supplied, expected):
-            return jsonify(error={"code": "CSRF_REJECTED", "message": "A valid same-origin decision token is required."}), 403
+            return jsonify(
+                error={
+                    "code": "CSRF_REJECTED",
+                    "message": "A valid same-origin decision token is required.",
+                }
+            ), 403
         return function(*args, **kwargs)
 
     return wrapped

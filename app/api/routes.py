@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, render_template, request, send_from_directory, abort
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    abort,
+)
 
 from app.auth import csrf_token, current_principal, require_csrf, require_permission
 
@@ -18,12 +26,12 @@ def home():
     return render_template("index.html", principal=current_principal())
 
 
-@api.get('/assets/<name>')
-@require_permission('view')
+@api.get("/assets/<name>")
+@require_permission("view")
 def asset(name):
     # IRIS reserves /static for its StreamServer. Route bundled assets through
     # the authenticated WSGI layer using a fixed filename allowlist.
-    filename = {'style': 'app.css', 'script': 'app.js'}.get(name)
+    filename = {"style": "app.css", "script": "app.js"}.get(name)
     if filename is None:
         abort(404)
     return send_from_directory(current_app.static_folder, filename)
@@ -46,7 +54,13 @@ def overview():
 @require_permission("view")
 def session_context():
     principal = current_principal()
-    return jsonify({"principal": principal.name, "roles": sorted(principal.roles), "csrf_token": csrf_token(principal)})
+    return jsonify(
+        {
+            "principal": principal.name,
+            "roles": sorted(principal.roles),
+            "csrf_token": csrf_token(principal),
+        }
+    )
 
 
 @api.get("/api/v1/tools")
@@ -54,7 +68,13 @@ def session_context():
 def tools():
     limit = min(max(int(request.args.get("limit", 50)), 1), 200)
     offset = max(int(request.args.get("offset", 0)), 0)
-    return jsonify({"items": repository().list_tools(limit=limit, offset=offset), "limit": limit, "offset": offset})
+    return jsonify(
+        {
+            "items": repository().list_tools(limit=limit, offset=offset),
+            "limit": limit,
+            "offset": offset,
+        }
+    )
 
 
 @api.get("/api/v1/proposals")
@@ -72,7 +92,9 @@ def approve(proposal_id: str):
     revision = payload.get("revision")
     action_hash = payload.get("action_hash")
     if not isinstance(revision, int) or not isinstance(action_hash, str):
-        return jsonify(error={"code": "INVALID_DECISION", "message": "revision and action_hash are required."}), 400
+        return jsonify(
+            error={"code": "INVALID_DECISION", "message": "revision and action_hash are required."}
+        ), 400
     result = repository().decide_proposal(
         proposal_id=proposal_id,
         revision=revision,
@@ -82,7 +104,12 @@ def approve(proposal_id: str):
         reason=str(payload.get("reason", ""))[:1000],
     )
     if result is None:
-        return jsonify(error={"code": "STALE_PROPOSAL", "message": "Proposal revision or hash no longer matches."}), 409
+        return jsonify(
+            error={
+                "code": "STALE_PROPOSAL",
+                "message": "Proposal revision or hash no longer matches.",
+            }
+        ), 409
     return jsonify(result)
 
 
@@ -94,7 +121,9 @@ def reject(proposal_id: str):
     revision = payload.get("revision")
     action_hash = payload.get("action_hash")
     if not isinstance(revision, int) or not isinstance(action_hash, str):
-        return jsonify(error={"code": "INVALID_DECISION", "message": "revision and action_hash are required."}), 400
+        return jsonify(
+            error={"code": "INVALID_DECISION", "message": "revision and action_hash are required."}
+        ), 400
     result = repository().decide_proposal(
         proposal_id=proposal_id,
         revision=revision,
@@ -104,5 +133,10 @@ def reject(proposal_id: str):
         reason=str(payload.get("reason", ""))[:1000],
     )
     if result is None:
-        return jsonify(error={"code": "STALE_PROPOSAL", "message": "Proposal revision or hash no longer matches."}), 409
+        return jsonify(
+            error={
+                "code": "STALE_PROPOSAL",
+                "message": "Proposal revision or hash no longer matches.",
+            }
+        ), 409
     return jsonify(result)

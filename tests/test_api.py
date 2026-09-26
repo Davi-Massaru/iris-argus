@@ -21,21 +21,40 @@ def test_api_requires_authentication():
 
 def test_authenticated_overview_is_bounded():
     client = create_app(MemoryRepository(), testing=True).test_client()
-    response = client.get("/api/v1/overview", environ_base={"REMOTE_USER": "reader", "agentic.test.roles": "AgenticViewer"})
+    response = client.get(
+        "/api/v1/overview",
+        environ_base={"REMOTE_USER": "reader", "agentic.test.roles": "AgenticViewer"},
+    )
     assert response.status_code == 200
     assert response.get_json()["pending_approvals"] == 0
 
 
 def test_approval_requires_csrf_and_exact_revision_hash():
     repository = MemoryRepository()
-    repository.proposals.append({"id": "p1", "revision": 1, "action_hash": "abc", "state": "PENDING_APPROVAL"})
+    repository.proposals.append(
+        {"id": "p1", "revision": 1, "action_hash": "abc", "state": "PENDING_APPROVAL"}
+    )
     client = create_app(repository, testing=True).test_client()
     environment = {"REMOTE_USER": "_SYSTEM", "agentic.test.roles": "%All"}
-    rejected = client.post("/api/v1/proposals/p1/approve", json={"revision": 1, "action_hash": "abc"}, environ_base=environment)
+    rejected = client.post(
+        "/api/v1/proposals/p1/approve",
+        json={"revision": 1, "action_hash": "abc"},
+        environ_base=environment,
+    )
     assert rejected.status_code == 403
     token = client.get("/api/v1/session", environ_base=environment).get_json()["csrf_token"]
-    stale = client.post("/api/v1/proposals/p1/approve", json={"revision": 2, "action_hash": "abc"}, headers={"X-Agentic-CSRF": token}, environ_base=environment)
+    stale = client.post(
+        "/api/v1/proposals/p1/approve",
+        json={"revision": 2, "action_hash": "abc"},
+        headers={"X-Agentic-CSRF": token},
+        environ_base=environment,
+    )
     assert stale.status_code == 409
-    accepted = client.post("/api/v1/proposals/p1/approve", json={"revision": 1, "action_hash": "abc"}, headers={"X-Agentic-CSRF": token}, environ_base=environment)
+    accepted = client.post(
+        "/api/v1/proposals/p1/approve",
+        json={"revision": 1, "action_hash": "abc"},
+        headers={"X-Agentic-CSRF": token},
+        environ_base=environment,
+    )
     assert accepted.status_code == 200
     assert accepted.get_json()["state"] == "APPROVED"

@@ -25,12 +25,17 @@ class IRISRepository:
         try:
             import iris
             from scripts.readiness import ready
-            return {"ready": ready(), "database": "IRIS", "version": str(iris.system.Version.GetVersion())}
+
+            return {
+                "ready": ready(),
+                "database": "IRIS",
+                "version": str(iris.system.Version.GetVersion()),
+            }
         except Exception as error:
             return {"ready": False, "database": "IRIS", "error": type(error).__name__}
 
-    def overview(self) -> dict[str, Any]:
-        counts = {}
+    def overview(self) -> dict[str, int | str]:
+        counts: dict[str, int | str] = {}
         statements = {
             "active_agents": "SELECT COUNT(*) FROM Agentic.AI_AGENT WHERE Status = 'ACTIVE'",
             "current_runs": "SELECT COUNT(*) FROM Agentic.AI_RUN WHERE State IN ('QUEUED','RUNNING','WAITING_APPROVAL')",
@@ -50,20 +55,24 @@ class IRISRepository:
         )
         return {row[0]: bool(row[1]) for row in rows}
 
-    def set_tool_availability(self, *, stable_key: str, contract_hash: str, enabled: bool, actor: str, reason: str = ""):
+    def set_tool_availability(
+        self, *, stable_key: str, contract_hash: str, enabled: bool, actor: str, reason: str = ""
+    ):
         from uuid import uuid4
 
         _sql("START TRANSACTION")
         try:
             rows = _rows(
-                "SELECT ID FROM Agentic.AI_TOOL_VERSION "
-                "WHERE StableKey = ? AND ContractHash = ?",
+                "SELECT ID FROM Agentic.AI_TOOL_VERSION WHERE StableKey = ? AND ContractHash = ?",
                 (stable_key, contract_hash),
             )
             if not rows:
                 raise LookupError("Tool version not found in the pinned contract.")
             tool_version_id = rows[0][0]
-            _sql("UPDATE Agentic.AI_TOOL_VERSION SET Enabled = Enabled WHERE ID = ?", (tool_version_id,))
+            _sql(
+                "UPDATE Agentic.AI_TOOL_VERSION SET Enabled = Enabled WHERE ID = ?",
+                (tool_version_id,),
+            )
             rows = _rows(
                 "SELECT Method,Classification,Enabled FROM Agentic.AI_TOOL_VERSION WHERE ID = ?",
                 (tool_version_id,),
@@ -82,10 +91,21 @@ class IRISRepository:
                     "(ID,ToolVersionID,Classification,PrivilegesJSON,ScopeRulesJSON,Reason,Reviewer,ApprovalReference,CreatedAt) "
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (
-                        str(uuid4()), tool_version_id, classification,
-                        json.dumps({"availability": "AVAILABLE" if enabled else "BLOCKED", "method": method}),
-                        "{}", reason[:4000] or f"Availability {'enabled' if enabled else 'blocked'} in the DBA catalog.",
-                        actor, "dba-tool-availability", datetime.now(timezone.utc).isoformat(),
+                        str(uuid4()),
+                        tool_version_id,
+                        classification,
+                        json.dumps(
+                            {
+                                "availability": "AVAILABLE" if enabled else "BLOCKED",
+                                "method": method,
+                            }
+                        ),
+                        "{}",
+                        reason[:4000]
+                        or f"Availability {'enabled' if enabled else 'blocked'} in the DBA catalog.",
+                        actor,
+                        "dba-tool-availability",
+                        datetime.now(timezone.utc).isoformat(),
                     ),
                 )
             _sql("COMMIT")
@@ -94,7 +114,9 @@ class IRISRepository:
             raise
         return {"stable_key": stable_key, "available": enabled}
 
-    def apply_tool_availability_preset(self, *, tools: list[dict[str, Any]], enabled: bool, actor: str, reason: str) -> int:
+    def apply_tool_availability_preset(
+        self, *, tools: list[dict[str, Any]], enabled: bool, actor: str, reason: str
+    ) -> int:
         from uuid import uuid4
 
         changed = 0
@@ -108,7 +130,10 @@ class IRISRepository:
                 if not rows:
                     raise LookupError("Tool version not found in the pinned contract.")
                 tool_version_id = rows[0][0]
-                _sql("UPDATE Agentic.AI_TOOL_VERSION SET Enabled = Enabled WHERE ID = ?", (tool_version_id,))
+                _sql(
+                    "UPDATE Agentic.AI_TOOL_VERSION SET Enabled = Enabled WHERE ID = ?",
+                    (tool_version_id,),
+                )
                 rows = _rows(
                     "SELECT Method,Classification,Enabled FROM Agentic.AI_TOOL_VERSION WHERE ID = ?",
                     (tool_version_id,),
@@ -118,15 +143,28 @@ class IRISRepository:
                 method, classification, current_enabled = rows[0]
                 if bool(current_enabled) == enabled:
                     continue
-                _sql("UPDATE Agentic.AI_TOOL_VERSION SET Enabled = ? WHERE ID = ?", (int(enabled), tool_version_id))
+                _sql(
+                    "UPDATE Agentic.AI_TOOL_VERSION SET Enabled = ? WHERE ID = ?",
+                    (int(enabled), tool_version_id),
+                )
                 _sql(
                     "INSERT INTO Agentic.AI_TOOL_POLICY_OVERRIDE "
                     "(ID,ToolVersionID,Classification,PrivilegesJSON,ScopeRulesJSON,Reason,Reviewer,ApprovalReference,CreatedAt) "
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (
-                        str(uuid4()), tool_version_id, classification,
-                        json.dumps({"availability": "AVAILABLE" if enabled else "BLOCKED", "method": method}),
-                        "{}", reason[:4000], actor, "dba-tool-availability-preset",
+                        str(uuid4()),
+                        tool_version_id,
+                        classification,
+                        json.dumps(
+                            {
+                                "availability": "AVAILABLE" if enabled else "BLOCKED",
+                                "method": method,
+                            }
+                        ),
+                        "{}",
+                        reason[:4000],
+                        actor,
+                        "dba-tool-availability-preset",
                         datetime.now(timezone.utc).isoformat(),
                     ),
                 )
@@ -138,18 +176,30 @@ class IRISRepository:
         return changed
 
     def list_tools(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
-        rows = _rows(
-            "SELECT TOP ? StableKey,Method,PathTemplate,Summary,Classification,Enabled,ContractHash "
-            "FROM Agentic.AI_TOOL_VERSION WHERE ID NOT IN (SELECT TOP ? ID FROM Agentic.AI_TOOL_VERSION ORDER BY PathTemplate,Method) "
-            "ORDER BY PathTemplate,Method",
-            (limit, offset),
-        ) if offset else _rows(
-            "SELECT TOP ? StableKey,Method,PathTemplate,Summary,Classification,Enabled,ContractHash "
-            "FROM Agentic.AI_TOOL_VERSION ORDER BY PathTemplate,Method",
-            (limit,),
+        rows = (
+            _rows(
+                "SELECT TOP ? StableKey,Method,PathTemplate,Summary,Classification,Enabled,ContractHash "
+                "FROM Agentic.AI_TOOL_VERSION WHERE ID NOT IN (SELECT TOP ? ID FROM Agentic.AI_TOOL_VERSION ORDER BY PathTemplate,Method) "
+                "ORDER BY PathTemplate,Method",
+                (limit, offset),
+            )
+            if offset
+            else _rows(
+                "SELECT TOP ? StableKey,Method,PathTemplate,Summary,Classification,Enabled,ContractHash "
+                "FROM Agentic.AI_TOOL_VERSION ORDER BY PathTemplate,Method",
+                (limit,),
+            )
         )
         return [
-            {"stable_key": row[0], "method": row[1], "path": row[2], "summary": row[3], "classification": row[4], "enabled": bool(row[5]), "contract_hash": row[6]}
+            {
+                "stable_key": row[0],
+                "method": row[1],
+                "path": row[2],
+                "summary": row[3],
+                "classification": row[4],
+                "enabled": bool(row[5]),
+                "contract_hash": row[6],
+            }
             for row in rows
         ]
 
@@ -159,8 +209,21 @@ class IRISRepository:
             "FROM Agentic.AI_ACTION_PROPOSAL ORDER BY CreatedAt DESC",
             (limit,),
         )
-        keys = ("id", "revision", "action_hash", "target_instance_id", "environment", "namespace", "method", "resolved_path", "risk", "state", "created_at", "expires_at")
-        return [dict(zip(keys, row)) for row in rows]
+        keys = (
+            "id",
+            "revision",
+            "action_hash",
+            "target_instance_id",
+            "environment",
+            "namespace",
+            "method",
+            "resolved_path",
+            "risk",
+            "state",
+            "created_at",
+            "expires_at",
+        )
+        return [dict(zip(keys, row, strict=True)) for row in rows]
 
     def decide_proposal(self, **decision):
         found = _rows(
@@ -172,14 +235,28 @@ class IRISRepository:
         decided_at = datetime.now(timezone.utc).isoformat()
         _sql(
             "INSERT INTO Agentic.AI_APPROVAL (ID,ProposalID,ProposalRevision,ActionHash,Actor,Decision,DecidedAt,Reason) VALUES (?,?,?,?,?,?,?,?)",
-            (f"{decision['proposal_id']}:{decision['revision']}:{decision['decision']}", decision["proposal_id"], decision["revision"], decision["action_hash"], decision["actor"], decision["decision"], decided_at, decision["reason"]),
+            (
+                f"{decision['proposal_id']}:{decision['revision']}:{decision['decision']}",
+                decision["proposal_id"],
+                decision["revision"],
+                decision["action_hash"],
+                decision["actor"],
+                decision["decision"],
+                decided_at,
+                decision["reason"],
+            ),
         )
         state = "APPROVED" if decision["decision"] == "APPROVED" else "REJECTED"
         _sql(
             "UPDATE Agentic.AI_ACTION_PROPOSAL SET State = ? WHERE ID = ? AND Revision = ? AND ActionHash = ? AND State = 'PENDING_APPROVAL'",
             (state, decision["proposal_id"], decision["revision"], decision["action_hash"]),
         )
-        return {"proposal_id": decision["proposal_id"], "revision": decision["revision"], "state": state, "decided_at": decided_at}
+        return {
+            "proposal_id": decision["proposal_id"],
+            "revision": decision["revision"],
+            "state": state,
+            "decided_at": decided_at,
+        }
 
 
 class MemoryRepository:
@@ -193,7 +270,13 @@ class MemoryRepository:
         return {"ready": True, "database": "test-memory"}
 
     def overview(self):
-        return {"active_agents": 0, "current_runs": 0, "pending_approvals": len(self.proposals), "open_alerts": 0, "monitoring_freshness": "Not configured"}
+        return {
+            "active_agents": 0,
+            "current_runs": 0,
+            "pending_approvals": len(self.proposals),
+            "open_alerts": 0,
+            "monitoring_freshness": "Not configured",
+        }
 
     def list_tools(self, *, limit, offset):
         return self.tools[offset : offset + limit]
@@ -217,7 +300,9 @@ class MemoryRepository:
         changed = 0
         keys = {(tool["stable_key"], tool["contract_hash"]) for tool in tools}
         for tool in self.tools:
-            if (tool.get("stable_key"), tool.get("contract_hash")) in keys and bool(tool.get("enabled", False)) != enabled:
+            if (tool.get("stable_key"), tool.get("contract_hash")) in keys and bool(
+                tool.get("enabled", False)
+            ) != enabled:
                 tool["enabled"] = enabled
                 tool["updated_by"] = actor
                 tool["availability_reason"] = reason
@@ -229,7 +314,12 @@ class MemoryRepository:
 
     def decide_proposal(self, **decision):
         for proposal in self.proposals:
-            if proposal["id"] == decision["proposal_id"] and proposal["revision"] == decision["revision"] and proposal["action_hash"] == decision["action_hash"] and proposal["state"] == "PENDING_APPROVAL":
+            if (
+                proposal["id"] == decision["proposal_id"]
+                and proposal["revision"] == decision["revision"]
+                and proposal["action_hash"] == decision["action_hash"]
+                and proposal["state"] == "PENDING_APPROVAL"
+            ):
                 proposal["state"] = "APPROVED" if decision["decision"] == "APPROVED" else "REJECTED"
                 return proposal
         return None

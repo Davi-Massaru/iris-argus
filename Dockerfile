@@ -12,10 +12,13 @@ RUN python3 -m pip install --target /usr/irissys/mgr/python -r requirements.txt
 
 FROM dependencies AS test
 COPY --chown=irisowner:irisowner requirements-dev.txt ./
-RUN python3 -m pip install --target /usr/irissys/mgr/python -r requirements-dev.txt
+RUN python3 -m pip install --user --break-system-packages -r requirements-dev.txt
 COPY --chown=irisowner:irisowner . .
 ENV PYTHONPATH=/opt/agentic:/usr/irissys/mgr/python
-RUN python3 -m pytest -q
+ENV PATH=/home/irisowner/.local/bin:${PATH}
+RUN python3 -m ruff check app scripts tests worker && \
+    python3 -m ruff format --check app scripts tests worker && \
+    python3 -m pytest -q
 
 FROM dependencies AS runtime
 COPY --chown=irisowner:irisowner . .

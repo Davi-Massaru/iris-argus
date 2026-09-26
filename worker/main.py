@@ -21,8 +21,15 @@ def stop(*_args):
 
 def connectivity_probe() -> str:
     import iris
+
     iris.system.Process.SetNamespace("AGENTIC")
-    row = next(iter(iris.sql.exec("SELECT COUNT(*) FROM Agentic.AI_SCHEMA_MIGRATION WHERE Outcome = ?", "SUCCEEDED")))
+    row = next(
+        iter(
+            iris.sql.exec(
+                "SELECT COUNT(*) FROM Agentic.AI_SCHEMA_MIGRATION WHERE Outcome = ?", "SUCCEEDED"
+            )
+        )
+    )
     if int(row[0]) < 1:
         raise RuntimeError("Schema is not ready")
     return f"worker_sql_ok migrations={int(row[0])}"
@@ -33,6 +40,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop)
     print(connectivity_probe(), flush=True)
     from app.mvp.repository import AgentRepository
+
     repository = AgentRepository()
     repository.recover()
     child = None
@@ -46,17 +54,20 @@ def main() -> None:
                 if time.monotonic() - started > 240:
                     child.kill()
                     child.wait()
-                    repository.finish(run_id, 'FAILED', error='RUN_TIMEOUT')
+                    repository.finish(run_id, "FAILED", error="RUN_TIMEOUT")
                 if child.poll() is not None:
-                    if repository.get_run(run_id)['state'] == 'RUNNING':
-                        repository.finish(run_id, 'FAILED', error='RUNNER_EXITED')
+                    if repository.get_run(run_id)["state"] == "RUNNING":
+                        repository.finish(run_id, "FAILED", error="RUNNER_EXITED")
                     child = None
             repository.schedule()
             if child is None:
                 run_id = repository.claim()
                 if run_id:
-                    child = subprocess.Popen(['/usr/irissys/bin/irispython', '/opt/agentic/worker/run_agent.py', run_id],
-                                             env=os.environ.copy(), stdin=subprocess.DEVNULL)
+                    child = subprocess.Popen(
+                        ["/usr/irissys/bin/irispython", "/opt/agentic/worker/run_agent.py", run_id],
+                        env=os.environ.copy(),
+                        stdin=subprocess.DEVNULL,
+                    )
                     started = time.monotonic()
             time.sleep(2)
     finally:
@@ -67,7 +78,7 @@ def main() -> None:
             except subprocess.TimeoutExpired:
                 child.kill()
                 child.wait()
-            repository.finish(run_id, 'FAILED', error='WORKER_STOPPED')
+            repository.finish(run_id, "FAILED", error="WORKER_STOPPED")
     HEARTBEAT.unlink(missing_ok=True)
 
 

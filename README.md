@@ -8,6 +8,8 @@ This project is an entry in the [InterSystems Programming Contest: Build Your Ow
 
 > **The catalog is the administrative building set.** A DBA can create agents for health audits, capacity reviews, lock investigation, automatic alerts, scheduled checks, task creation, or incident response. Read and mutating operations can be combined when the target identity and catalog policy allow them. The practical limit is the administrator's operational design—not a hard-coded dashboard—while the tool allowlist, IRIS privileges, fixed parameters, and evidence record keep that freedom governed.
 
+![ICO](docs/ico.png)
+
 ## Why It Exists
 
 Operational AI is useful only when access, evidence, and accountability are visible. IRIS DBA Agents provides:

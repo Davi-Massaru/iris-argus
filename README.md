@@ -542,7 +542,3 @@ tests/                 Unit and API tests
 - [Compatibility notes](docs/compatibility.md)
 - [Pinned SysAdmin contract](specification/mainspec_v2.json)
 - [Reviewed read-only operations](specification/reviewed_read_operations.json)
-
-## License
-
-See [LICENSE](LICENSE).

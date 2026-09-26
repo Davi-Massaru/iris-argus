@@ -883,7 +883,10 @@ summary {
     }
 
     .identity {
-        font-size: 11px
+        display: grid;
+        grid-template-rows: auto auto;
+        line-height: 1.2;
+        height: auto;
     }
 
     .hero h2 {

@@ -11,19 +11,20 @@
 <section class="panel" id="editor" hidden>
 <div class="panel-heading"><h3 id="editor-title">Create agent</h3><button id="close-editor" class="secondary">Close</button></div>
 <form id="agent-form">
-<div class="form-grid"><label>Name<input id="name" required maxlength="120" placeholder="Agent name"></label><label>Ollama model<input id="model" required maxlength="100" value="qwen2.5:3b"></label></div>
+<div class="form-grid"><label>Name<input id="name" required maxlength="120" placeholder="Agent name"></label><label>Model<input id="model" required maxlength="100" value="qwen2.5:3b"><small id="provider-note" class="provider-note">Provider: Ollama</small></label></div>
 <label>Agent instructions<textarea id="prompt" rows="3" maxlength="6000" required placeholder="Define the agent's role, context, and how it should report results."></textarea></label>
 <label>Task / skill<textarea id="task" rows="4" maxlength="6000" required placeholder="Describe what to query, which conditions to evaluate, and what report to produce."></textarea></label>
 <div class="form-grid"><label>Interval in seconds (0 = manual only)<input id="interval" type="number" min="0" max="86400" value="0" required></label><label class="check"><input id="enabled" type="checkbox" checked> Enabled</label></div>
 <fieldset class="tool-fieldset"><legend>Choose approved queries</legend>
 <p class="tool-intro">Search the reviewed SysAdmin API queries and select only the data your agent needs. You can assign up to 12 queries.</p>
 <div class="tool-method-guide" aria-label="HTTP method guide">
-<div><span class="method-badge get">GET</span><span>Read or retrieve data</span></div>
-<div><span class="method-badge post">POST</span><span>Create or start an action</span></div>
-<div><span class="method-badge put">PUT / PATCH</span><span>Update data</span></div>
-<div><span class="method-badge delete">DELETE</span><span>Remove data</span></div>
+<div><span class="method-badge get">GET</span><span>Usually retrieve data</span></div>
+<div><span class="method-badge post">POST</span><span>Submit data or invoke an operation</span></div>
+<div><span class="method-badge put">PUT / PATCH</span><span>Usually update data</span></div>
+<div><span class="method-badge delete">DELETE</span><span>Usually remove data</span></div>
+<div><span class="method-badge head">HEAD</span><span>Read headers only</span></div>
 </div>
-<p class="tool-policy"><strong>Available in this MVP:</strong> 18 reviewed GET queries. POST, PUT, PATCH, DELETE, and other unreviewed operations are blocked.</p>
+<p class="tool-policy"><strong>The HTTP method is a hint, not a safety guarantee.</strong> Read each operation's description and verify it is supported by your target IRIS release before enabling it.</p>
 <p class="tool-source"><a href="https://github.com/intersystems-community/sysadmin-api-specification/blob/master/mainspec_v2.json" target="_blank" rel="noopener noreferrer">View the SysAdmin API specification</a><span>Operation names, descriptions, and parameters below come from this contract.</span></p>
 <div class="tool-browser-toolbar">
 <label for="tool-search">Search approved queries<input id="tool-search" type="search" placeholder="Try locks, processes, /v2/task, or maxRows"></label>
@@ -36,5 +37,8 @@
 </form></section>
 <section class="panel"><div class="panel-heading"><h3>Runs and reports</h3><span class="pill safe">Read-only</span></div><div class="table-wrap"><table><thead><tr><th>Agent</th><th>Started</th><th>Status</th><th>Details</th></tr></thead><tbody id="run-list"></tbody></table></div></section>
 <section class="panel" id="run-detail" hidden><div class="panel-heading"><h3>Report and evidence</h3><button id="close-detail" class="secondary">Close</button></div><div id="report-body"></div></section>
-<details class="panel"><summary>SysAdmin catalog — <span id="catalog-count">0</span> operations</summary><p class="catalog-note">Reviewed queries are available in the form. Other operations are blocked in this MVP.</p><div class="table-wrap"><table><thead><tr><th>Method</th><th>Operation</th><th>Availability</th></tr></thead><tbody id="catalog-list"></tbody></table></div></details>
+<details class="panel" id="tool-catalog"><summary>Tool availability and SysAdmin catalog — <span id="catalog-count">0</span> operations, <span id="catalog-available-count">0 enabled</span></summary>
+<p class="catalog-note">All operations start blocked. “Enabled” means this application authorizes assigned agents to call the operation automatically, including scheduled runs; it does not test endpoint health or target credentials. Verify the target release and permissions first. Arguments and results are stored as run evidence; recognized sensitive fields are redacted.</p>
+<label class="catalog-search" for="catalog-search">Find an operation<input id="catalog-search" type="search" placeholder="Search method, path, or description"></label>
+<div class="table-wrap"><table><thead><tr><th>Method</th><th>Operation</th><th>Description</th><th>Status</th><th>DBA control</th></tr></thead><tbody id="catalog-list"></tbody></table></div></details>
 </main><script src="assets/script" defer></script></body></html>

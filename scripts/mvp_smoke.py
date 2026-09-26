@@ -18,13 +18,28 @@ def call(method, path, payload=None, status=200):
 
 token = call('GET', '/api/v1/session')['csrf_token']
 session.headers['X-Agentic-CSRF'] = token
-config = dict(name='__MVP_SMOKE__', prompt='Você é um DBA. Consulte as ferramentas e descreva apenas evidências.',
-              task='Consulte get_v2_locks e informe quantos registros foram retornados. Relatório breve em português.',
-              model='qwen2.5:3b', provider='ollama', enabled=True, interval_seconds=0,
+locks_tool = next(tool for tool in call('GET', '/api/mvp/catalog')['items'] if tool['key'] == 'get_v2_locks')
+fixture_path = Path('/usr/irissys/mgr/agentic/mvp-smoke.json')
+fixture = {'tool_availability': [{
+    'stable_key': locks_tool['stable_key'],
+    'contract_hash': locks_tool['contract_hash'],
+    'available': locks_tool['available'],
+}]}
+fixture_path.write_text(json.dumps(fixture))
+if not locks_tool['available']:
+    call('PUT', f"/api/mvp/catalog/{locks_tool['stable_key']}/availability", {
+        'enabled': True,
+        'acknowledge_sensitive_data': locks_tool['sensitive'],
+        'reason': 'Enabled by the authenticated smoke-test DBA.',
+    })
+config = dict(name='__MVP_SMOKE__', prompt='You are a DBA. Use the tools and report only observed evidence.',
+              task='Query get_v2_locks and report how many rows were returned. Keep the report brief and in English.',
+              model=os.environ.get('AGENTIC_MODEL', 'qwen2.5:3b'), provider=os.environ.get('AGENTIC_PROVIDER', 'ollama'), enabled=True, interval_seconds=0,
               tools=[{'key':'get_v2_locks', 'fixed':{'maxRows':100}}])
 agent = call('POST', '/api/mvp/agents', config, 201)
-Path('/usr/irissys/mgr/agentic/mvp-smoke.json').write_text(json.dumps({'agent_id':agent['id']}))
-agent = call('PUT', '/api/mvp/agents/' + agent['id'], {**agent, 'prompt': config['prompt'] + ' Cite evidências.'})
+fixture['agent_id'] = agent['id']
+fixture_path.write_text(json.dumps(fixture))
+agent = call('PUT', '/api/mvp/agents/' + agent['id'], {**agent, 'prompt': config['prompt'] + ' Cite evidence.'})
 call('PUT', '/api/mvp/agents/' + agent['id'], {**agent, 'revision':1}, 409)
 run = call('POST', '/api/mvp/agents/' + agent['id'] + '/runs', {}, 202)
 call('POST', '/api/mvp/agents/' + agent['id'] + '/runs', {}, 409)
@@ -39,5 +54,6 @@ assert result['state'] == 'SUCCEEDED', result['error']
 assert result['report'] and any(c['tool']=='get_v2_locks' and c['outcome']=='SUCCEEDED' for c in result['calls'])
 paused = call('PUT', '/api/mvp/agents/' + agent['id'], {**agent, 'enabled':False})
 call('POST', '/api/mvp/agents/' + agent['id'] + '/runs', {}, 409)
-Path('/usr/irissys/mgr/agentic/mvp-smoke.json').write_text(json.dumps({'agent_id':agent['id'], 'run_id':run['id']}))
-print('MVP_HTTP_OK create, edit, revision conflict, queue dedup, Ollama, SysAdmin, report, pause', flush=True)
+fixture['run_id'] = run['id']
+fixture_path.write_text(json.dumps(fixture))
+print('MVP_HTTP_OK create, edit, revision conflict, queue dedup, provider, SysAdmin, report, pause', flush=True)

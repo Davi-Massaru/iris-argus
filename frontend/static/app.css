@@ -362,6 +362,13 @@ textarea {
     font: inherit
 }
 
+.provider-note {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11px
+}
+
 textarea {
     resize: vertical
 }
@@ -404,7 +411,7 @@ fieldset {
 
 .tool-method-guide {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     border: 1px solid var(--line);
     border-radius: 4px;
     background: #f8fafb
@@ -461,6 +468,12 @@ fieldset {
     border-color: #e9b5b0;
     background: #fff2f0;
     color: #9d241b
+}
+
+.method-badge.head {
+    border-color: #b8c7d5;
+    background: #f0f4f7;
+    color: #42596a
 }
 
 .tool-policy {
@@ -670,6 +683,72 @@ fieldset {
     text-align: center
 }
 
+.tool-blocked-badge,
+.catalog-access-note {
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 600
+}
+
+.catalog-search {
+    max-width: 560px;
+    margin: 8px 20px 16px;
+    font-size: 12px;
+    font-weight: 600
+}
+
+.catalog-search input {
+    margin-bottom: 0
+}
+
+#catalog-list td:nth-child(2) {
+    min-width: 220px;
+    font-family: ui-monospace, monospace;
+    overflow-wrap: anywhere
+}
+
+#catalog-list td:nth-child(3) {
+    min-width: 280px;
+    color: var(--muted);
+    line-height: 1.45
+}
+
+#catalog-list td.availability-on {
+    color: var(--brand-deep);
+    font-weight: 650
+}
+
+#catalog-list td.availability-off {
+    color: var(--muted)
+}
+
+#catalog-list tr:hover {
+    background: #f8fafb
+}
+
+.availability-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer
+}
+
+.availability-toggle input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--brand)
+}
+
+.availability-toggle input:disabled {
+    cursor: not-allowed
+}
+
 pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -753,6 +832,11 @@ summary {
         border-top: 1px solid var(--line)
     }
 
+    .tool-method-guide > div:nth-child(5) {
+        border-left: 0;
+        border-top: 1px solid var(--line)
+    }
+
     .tool-browser-toolbar {
         display: block
     }
@@ -769,6 +853,10 @@ summary {
     .tool-option {
         grid-template-columns: 1fr;
         gap: 14px
+    }
+
+    .catalog-search {
+        margin: 8px 14px 14px
     }
 
     main {

@@ -23,14 +23,32 @@ def request(method, path, data=None, status=200):
 
 
 session.headers['X-Agentic-CSRF'] = request('GET', '/api/v1/session')['csrf_token']
-agent = request('POST', '/api/mvp/agents', dict(
-    name='__MVP_LOCKS_ACCEPTANCE__', prompt='Você é um DBA. Use ferramentas para produzir relatório curto e factual em português.',
-    task='Consulte get_v2_locks. Se houver pelo menos 50 registros, consulte get_v2_process para cada PID distinto observado (não por lock) e registre um relatório de erro. Se houver menos de 50, registre que a condição não ocorreu. Cite os IDs das evidências. Não altere nada.',
-    model='qwen2.5:3b', provider='ollama', enabled=True, interval_seconds=0,
-    tools=[{'key':'get_v2_locks','fixed':{'filter':'AgenticMVPTest','maxRows':100}},
-           {'key':'get_v2_process','fixed':{}}]), status=201)
-Path('/usr/irissys/mgr/agentic/mvp-locks-test.json').write_text(json.dumps({'agent_id':agent['id']}))
+catalog = request('GET', '/api/mvp/catalog')['items']
+required_tools = [next(tool for tool in catalog if tool['key'] == key) for key in ('get_v2_locks', 'get_v2_process')]
+fixture_path = Path('/usr/irissys/mgr/agentic/mvp-locks-test.json')
+fixture = {'tool_availability': [{
+    'stable_key': tool['stable_key'],
+    'contract_hash': tool['contract_hash'],
+    'available': tool['available'],
+} for tool in required_tools]}
+fixture_path.write_text(json.dumps(fixture))
+agent = None
 try:
+    for tool in required_tools:
+        if not tool['available']:
+            request('PUT', f"/api/mvp/catalog/{tool['stable_key']}/availability", {
+                'enabled': True,
+                'acknowledge_sensitive_data': tool['sensitive'],
+                'reason': 'Enabled by the authenticated 50-lock acceptance DBA.',
+            })
+    agent = request('POST', '/api/mvp/agents', dict(
+        name='__MVP_LOCKS_ACCEPTANCE__', prompt='You are a DBA. Use tools to produce a concise, factual report in English.',
+        task='Query get_v2_locks. If at least 50 rows are returned, query get_v2_process for each distinct observed PID (not once per lock) and report the findings. If fewer than 50 rows are returned, state that the condition was not met. Cite evidence IDs. Do not make changes.',
+        model=os.environ.get('AGENTIC_MODEL', 'qwen2.5:3b'), provider=os.environ.get('AGENTIC_PROVIDER', 'ollama'), enabled=True, interval_seconds=0,
+        tools=[{'key':'get_v2_locks','fixed':{'filter':'AgenticMVPTest','maxRows':100}},
+               {'key':'get_v2_process','fixed':{}}]), status=201)
+    fixture['agent_id'] = agent['id']
+    fixture_path.write_text(json.dumps(fixture))
     iris.execute('for i=1:1:50 lock +^AgenticMVPTest(i):1')
     run = request('POST', '/api/mvp/agents/' + agent['id'] + '/runs', {}, 202)
     print('LOCKS_TEST_QUEUED', run['id'], flush=True)
@@ -49,4 +67,5 @@ try:
     print('LOCKS_50_ACCEPTANCE_OK', result['report'][:1200], flush=True)
 finally:
     iris.execute('lock')
-    request('PUT', '/api/mvp/agents/' + agent['id'], {**agent,'enabled':False})
+    if agent:
+        request('PUT', '/api/mvp/agents/' + agent['id'], {**agent,'enabled':False})

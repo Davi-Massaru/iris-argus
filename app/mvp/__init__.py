@@ -1,1 +1,1 @@
-"""DBA-created agents, read-only tools and durable executions."""
+"""DBA-configured agents, enabled SysAdmin tools, and durable executions."""

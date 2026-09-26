@@ -1,20 +1,34 @@
 """Reviewed read operations derived from the pinned SysAdmin contract."""
 import hashlib
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-# Explicit review, not an inference that every GET is safe.
-READ_PATHS = {
-    '/info', '/v2/locks', '/v2/process', '/v2/processes',
-    '/v2/monitor/dashboard/main', '/v2/monitor/dashboard/ecp',
-    '/v2/monitor/dashboard/globals-and-routines',
-    '/v2/monitor/dashboard/system-resources', '/v2/monitor/license-usage',
-    '/v2/monitor/system-usage', '/v2/monitor/system-usage/shared-memory',
-    '/v2/task', '/v2/task/info', '/v2/task/history', '/v2/tasks',
-    '/v2/task/manager', '/v2/task/upcoming', '/v2/journal/files',
-}
+SUPPORTED_METHODS = {'GET', 'POST', 'PUT', 'DELETE', 'HEAD'}
+SENSITIVE_FIELD = re.compile(r'password|secret|token|credential|authorization|api.?key', re.IGNORECASE)
+
+
+def _contains_sensitive_fields(value):
+    if isinstance(value, dict):
+        if value.get('format') == 'password':
+            return True
+        return any(
+            SENSITIVE_FIELD.search(str(key)) or _contains_sensitive_fields(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_sensitive_fields(item) for item in value)
+    return False
+
+
+def _remove_examples(value):
+    if isinstance(value, dict):
+        return {key: _remove_examples(item) for key, item in value.items() if key not in {'example', 'default'}}
+    if isinstance(value, list):
+        return [_remove_examples(item) for item in value]
+    return value
 
 
 def resolve(value, document, seen=()):
@@ -35,38 +49,68 @@ def resolve(value, document, seen=()):
 
 @lru_cache(maxsize=1)
 def catalog():
-    raw = (ROOT / 'specification/mainspec_v2.json').read_bytes()
+    source_path = ROOT / 'specification/mainspec_v2.json'
+    raw = source_path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    # This reviewed set is valid only for this exact contract.
     if digest != '1ab154c7c5d9b25e6b227944a44a120c670686f876c2e14abfb9ee5898596650':
         raise RuntimeError('Contract checksum mismatch')
     document = json.loads(raw)
     result = []
     for path, item in document['paths'].items():
-        for method, operation in item.items():
-            if method not in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'}:
+        if not isinstance(item, dict):
+            continue
+        path_parameters = item.get('parameters', [])
+        for raw_method, operation in item.items():
+            method = raw_method.upper()
+            if raw_method.lower() not in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} or not isinstance(operation, dict):
                 continue
-            allowed = method == 'get' and path in READ_PATHS
             parameters = {}
-            for p in [*item.get('parameters', []), *operation.get('parameters', [])]:
-                p = resolve(p, document)
+            supported = method in SUPPORTED_METHODS and '{' not in path and '}' not in path
+            for raw_parameter in [*path_parameters, *operation.get('parameters', [])]:
+                p = resolve(raw_parameter, document)
+                if not isinstance(p, dict) or 'in' not in p or 'name' not in p:
+                    supported = False
+                    continue
                 parameters[(p['in'], p['name'])] = p
             schema = {'type': 'object', 'properties': {}, 'required': [], 'additionalProperties': False}
             for p in parameters.values():
                 if p['in'] != 'query':
-                    allowed = False
-                schema['properties'][p['name']] = {**p.get('schema', {}), 'description': p.get('description', '')}
+                    supported = False
+                    continue
+                parameter_schema = resolve(p.get('schema', {}), document)
+                schema['properties'][p['name']] = {**parameter_schema, 'description': p.get('description', '')}
                 if p.get('required'):
                     schema['required'].append(p['name'])
-            key = method + '_' + path.strip('/').replace('/', '_').replace('-', '_')
+
+            request_body = resolve(operation.get('requestBody'), document) if operation.get('requestBody') else None
+            if request_body:
+                json_body = request_body.get('content', {}).get('application/json')
+                body_schema = resolve(json_body.get('schema'), document) if isinstance(json_body, dict) and json_body.get('schema') else None
+                if not isinstance(body_schema, dict):
+                    supported = False
+                else:
+                    schema['properties']['body'] = body_schema
+                    if request_body.get('required'):
+                        schema['required'].append('body')
+
+            key = method.lower() + '_' + path.strip('/').replace('/', '_').replace('-', '_')
+            if len(key) > 64:
+                key = f'{method.lower()}_{hashlib.sha256(f"{method}:{path}".encode("utf-8")).hexdigest()[:32]}'
+            stable_key = hashlib.sha256(f'{digest}:{method}:{path}'.encode('utf-8')).hexdigest()
+            responses = resolve(operation.get('responses', {}), document)
+            sensitive = _contains_sensitive_fields({'request': schema, 'responses': responses})
             result.append(dict(key=key, method=method.upper(), path=path,
-                               description=operation.get('summary', ''), schema=schema,
-                               allowed=allowed, contract_hash=digest))
+                               description=operation.get('summary', ''), schema=_remove_examples(schema),
+                               stable_key=stable_key, supported=supported, allowed=False,
+                               sensitive=sensitive,
+                               contract_hash=digest))
     return result
 
 
 def tool_by_key(key):
     for item in catalog():
-        if item['key'] == key and item['allowed']:
-            return item
-    raise ValueError('Ferramenta não autorizada no MVP.')
+        if item['key'] == key:
+            if item['supported']:
+                return item
+            raise ValueError('Operation uses unsupported OpenAPI parameters or body content.')
+    raise ValueError('Unknown operation in the pinned API contract.')

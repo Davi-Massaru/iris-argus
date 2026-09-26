@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 from app.repositories.iris_repository import _rows, _sql
+from app.mvp.catalog import tool_by_key
 
 
 def now():
@@ -33,9 +34,15 @@ class AgentRepository:
     def get_agent(self, identifier):
         rows = _rows('SELECT ConfigJSON,Revision,ActiveRun,UpdatedAt FROM Agentic.MVP_AGENT WHERE ID=?', (identifier,))
         if not rows:
-            raise LookupError('Agente não encontrado.')
+            raise LookupError('Agent not found.')
         r = rows[0]
-        return dict(json.loads(r[0]), id=identifier, revision=r[1], active_run=r[2], updated_at=r[3])
+        config = json.loads(r[0])
+        for binding in config.get('tools', []):
+            if not binding.get('stable_key') and not binding.get('contract_hash'):
+                item = tool_by_key(binding['key'])
+                binding['stable_key'] = item['stable_key']
+                binding['contract_hash'] = item['contract_hash']
+        return dict(config, id=identifier, revision=r[1], active_run=r[2], updated_at=r[3])
 
     def save_agent(self, config, actor, identifier=None, revision=None):
         with transaction():
@@ -44,7 +51,7 @@ class AgentRepository:
                 _sql('UPDATE Agentic.MVP_AGENT SET Revision=Revision WHERE ID=?', (identifier,))
                 old = self.get_agent(identifier)
                 if type(revision) is not int or old['revision'] != revision:
-                    raise Conflict('O agente mudou. Recarregue antes de salvar.')
+                    raise Conflict('Agent changed. Reload before saving.')
                 _sql('UPDATE Agentic.MVP_AGENT SET Name=?,ConfigJSON=?,Revision=Revision+1,Enabled=?,IntervalSeconds=?,NextDue=?,UpdatedBy=?,UpdatedAt=? WHERE ID=?',
                      (config['name'], json.dumps(config), int(config['enabled']), config['interval_seconds'], time.time() + config['interval_seconds'], actor, now(), identifier))
             else:
@@ -58,9 +65,9 @@ class AgentRepository:
             _sql('UPDATE Agentic.MVP_AGENT SET Revision=Revision WHERE ID=?', (identifier,))
             agent = self.get_agent(identifier)
             if not agent['enabled']:
-                raise Conflict('Agente pausado.')
+                raise Conflict('Agent is paused.')
             if agent['active_run']:
-                raise Conflict('Já existe uma execução pendente para este agente.')
+                raise Conflict('A run is already pending for this agent.')
             if trigger == 'SCHEDULE':
                 due = _rows('SELECT NextDue,IntervalSeconds FROM Agentic.MVP_AGENT WHERE ID=?', (identifier,))[0]
                 if not due[1] or due[0] > time.time():
@@ -101,7 +108,7 @@ class AgentRepository:
     def get_run(self, identifier):
         rows = _rows('SELECT AgentID,SnapshotJSON,State,TriggerKind,Actor,CreatedAt,FinishedAt,Report,ErrorCode FROM Agentic.MVP_RUN WHERE ID=?', (identifier,))
         if not rows:
-            raise LookupError('Execução não encontrada.')
+            raise LookupError('Run not found.')
         r = rows[0]
         result = dict(zip(('agent_id','snapshot','state','trigger','actor','created_at','finished_at','report','error'), r))
         result.update(id=identifier, snapshot=json.loads(r[1]))

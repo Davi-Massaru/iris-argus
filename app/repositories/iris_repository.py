@@ -43,6 +43,57 @@ class IRISRepository:
         counts["monitoring_freshness"] = "Not configured"
         return counts
 
+    def list_tool_availability(self, contract_hash: str) -> dict[str, bool]:
+        rows = _rows(
+            "SELECT StableKey,Enabled FROM Agentic.AI_TOOL_VERSION WHERE ContractHash = ?",
+            (contract_hash,),
+        )
+        return {row[0]: bool(row[1]) for row in rows}
+
+    def set_tool_availability(self, *, stable_key: str, contract_hash: str, enabled: bool, actor: str, reason: str = ""):
+        from uuid import uuid4
+
+        _sql("START TRANSACTION")
+        try:
+            rows = _rows(
+                "SELECT ID FROM Agentic.AI_TOOL_VERSION "
+                "WHERE StableKey = ? AND ContractHash = ?",
+                (stable_key, contract_hash),
+            )
+            if not rows:
+                raise LookupError("Tool version not found in the pinned contract.")
+            tool_version_id = rows[0][0]
+            _sql("UPDATE Agentic.AI_TOOL_VERSION SET Enabled = Enabled WHERE ID = ?", (tool_version_id,))
+            rows = _rows(
+                "SELECT Method,Classification,Enabled FROM Agentic.AI_TOOL_VERSION WHERE ID = ?",
+                (tool_version_id,),
+            )
+            if not rows:
+                raise LookupError("Tool version no longer exists.")
+            method, classification, current_enabled = rows[0]
+            current_enabled = bool(current_enabled)
+            if current_enabled != enabled:
+                _sql(
+                    "UPDATE Agentic.AI_TOOL_VERSION SET Enabled = ? WHERE ID = ? AND ContractHash = ?",
+                    (int(enabled), tool_version_id, contract_hash),
+                )
+                _sql(
+                    "INSERT INTO Agentic.AI_TOOL_POLICY_OVERRIDE "
+                    "(ID,ToolVersionID,Classification,PrivilegesJSON,ScopeRulesJSON,Reason,Reviewer,ApprovalReference,CreatedAt) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (
+                        str(uuid4()), tool_version_id, classification,
+                        json.dumps({"availability": "AVAILABLE" if enabled else "BLOCKED", "method": method}),
+                        "{}", reason[:4000] or f"Availability {'enabled' if enabled else 'blocked'} in the DBA catalog.",
+                        actor, "dba-tool-availability", datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+            _sql("COMMIT")
+        except BaseException:
+            _sql("ROLLBACK")
+            raise
+        return {"stable_key": stable_key, "available": enabled}
+
     def list_tools(self, *, limit: int, offset: int) -> list[dict[str, Any]]:
         rows = _rows(
             "SELECT TOP ? StableKey,Method,PathTemplate,Summary,Classification,Enabled,ContractHash "
@@ -103,6 +154,21 @@ class MemoryRepository:
 
     def list_tools(self, *, limit, offset):
         return self.tools[offset : offset + limit]
+
+    def list_tool_availability(self, contract_hash):
+        return {
+            tool["stable_key"]: bool(tool.get("enabled", False))
+            for tool in self.tools
+            if tool.get("contract_hash") == contract_hash
+        }
+
+    def set_tool_availability(self, *, stable_key, contract_hash, enabled, actor, reason=""):
+        for tool in self.tools:
+            if tool.get("stable_key") == stable_key and tool.get("contract_hash") == contract_hash:
+                tool["enabled"] = enabled
+                tool["updated_by"] = actor
+                return {"stable_key": stable_key, "available": enabled}
+        return None
 
     def list_proposals(self, *, limit):
         return self.proposals[:limit]

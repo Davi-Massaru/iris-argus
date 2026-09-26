@@ -25,8 +25,8 @@ This document consolidates the referenced design and supplies implementation det
 | INV-01 | IMPLEMENT all application backend behavior in Python; expose the web backend through IRIS WSGI. |
 | INV-02 | PERSIST agents, prompts, tools, routines, watches, policies, memory, and execution history in IRIS tables. |
 | INV-03 | IMPORT SysAdmin tools from `specification/mainspec_v2.json`; do not hand-invent administrative endpoints. |
-| INV-04 | ALLOW automatic execution only for authorized, reviewed READ_ONLY operations. |
-| INV-05 | REQUIRE an Action Proposal and explicit DBA approval for every managed creation, alteration, removal, command with side effects, and mutable SQL operation. |
+| INV-04 | IMPORT all SysAdmin operations as disabled by default; execute only operations explicitly enabled by an authorized DBA and permitted by the target credentials. |
+| INV-05 | REQUIRE an Action Proposal and explicit DBA approval for managed SQL and application behavior changes. For a pinned SysAdmin API operation, an explicit DBA availability toggle is standing authorization for assigned agents to invoke it automatically, including scheduled runs; no per-call approval is required. |
 | INV-06 | EXECUTE the exact approved action. Do not regenerate arguments with an LLM after approval. |
 | INV-07 | REVALIDATE permissions, target identity, contract, expiry, and current resource state immediately before mutation. |
 | INV-08 | DENY privilege escalation through child agents, delegation, SQL, custom tools, memory, or configuration changes. |
@@ -35,7 +35,7 @@ This document consolidates the referenced design and supplies implementation det
 
 ### 2.1 Scope of approval
 
-Apply INV-05 to SysAdmin APIs, managed SQL, and changes to application behavior: agent definitions, tool bindings, prompts, policies, routines, watches, model settings, and connection targets. A DBA editing a form SHALL review its exact proposed change and explicitly approve it. Merely saving a draft is not approval to activate it.
+Apply INV-05 to managed SQL and changes to application behavior: agent definitions, tool bindings, prompts, policies, routines, watches, model settings, and connection targets. A DBA editing a form SHALL review its exact proposed change and explicitly approve it. Merely saving a draft is not approval to activate it. SysAdmin API execution is the exception: a `DBAApprover` can enable a pinned operation as a standing grant; disabling it blocks future dispatches, while an in-flight request may finish. This grant does not add privileges to the target credential or authorize arbitrary URLs, SQL, or shell commands.
 
 The runtime MUST persist proposals, runs, messages, findings, audit entries, alert lifecycle events, queue state, and extracted memory without recursively requesting approval. These are narrowly defined bookkeeping operations implemented by trusted repositories. They MUST NOT expose arbitrary SQL or accept caller-selected tables, privileges, targets, or executable configuration. An agent MAY create a draft child-agent proposal; only the approved activation creates the effective agent definition.
 
@@ -90,7 +90,7 @@ No custom ObjectScript business layer is required. IRIS-generated persistence cl
 4. CAPTURE method, path template, operation ID, descriptions, parameter locations, serialization rules, request media types, response schemas, and declared security requirements.
 5. CREATE immutable tool versions. Use a stable key from source identity, method, and path when operation IDs are absent or duplicated.
 6. CLASSIFY semantics. Set new or uncertain operations to UNKNOWN and disabled pending review. HTTP verb and summary text are classification hints, not proof.
-7. ACTIVATE reviewed versions through the configuration approval flow. Preserve previous versions for historical runs.
+7. KEEP every imported operation disabled. For this deployment's SysAdmin catalog, a `DBAApprover` may enable a pinned operation through the availability control; persist the actor and decision. Preserve previous versions for historical runs.
 8. ON REIMPORT, generate a change report. Invalidate affected pending approvals. Never silently preserve READ_ONLY classification after semantic changes.
 
 The registry SHALL remain traceable to `specification/mainspec_v2.json`. Do not manually maintain a competing endpoint catalog. Required privileges not declared by the source SHALL be recorded as reviewed policy metadata, with evidence from the deployed system.
@@ -99,13 +99,13 @@ The registry SHALL remain traceable to `specification/mainspec_v2.json`. Do not 
 
 | Classification | Behavior |
 |---|---|
-| READ_ONLY | Execute automatically only after authorization, resource scope, and read-side-effect review. |
-| MUTATION | Create proposal; wait for explicit DBA approval. |
-| UNKNOWN | Never auto-execute. Resolve semantics before enabling execution; approval alone does not make an unsupported tool valid. |
+| READ_ONLY | Starts blocked; execute automatically only when a DBA has enabled the pinned operation and the target authorizes it. |
+| MUTATION | Starts blocked; a DBA may explicitly enable it as standing authorization for automatic calls. There is no per-run approval prompt. |
+| UNKNOWN | Starts blocked. Never auto-enable on import; execution requires an explicit DBA availability toggle and a supported request shape. |
 
 Treat create/update/delete, start/stop, pause/resume, terminate, enable/disable, grant/revoke, and administrative command execution as mutations whenever they change state. A GET can be unsafe. A POST can be observational. Classify actual behavior.
 
-Bind tools to immutable agent versions. Assignment of a mutation tool grants permission to propose it, not permission to execute it. Custom OpenAPI integrations are an extension; disable them initially and apply the same importer, target restrictions, policy, and approval controls when introduced.
+Bind tools to immutable agent versions. Assignment is not enough: the operation must also be globally enabled by a DBA. For enabled SysAdmin operations, that toggle authorizes automatic execution by any agent assigned the tool, including scheduled runs. Custom OpenAPI integrations are an extension; disable them initially and apply the same importer, target restrictions, and availability controls when introduced.
 
 ### 5.3 Request construction
 
@@ -118,14 +118,16 @@ IMPLEMENT `ToolExecutionGateway` as the sole agent-facing entry point.
 ```text
 request -> resolve pinned tool -> validate input -> authorize agent and scope
         -> check enabled state and budgets -> classify
-              READ_ONLY -> restricted executor -> evidence -> result
-              MUTATION  -> immutable proposal -> WAITING_APPROVAL
-              UNKNOWN   -> blocked classification review
+          disabled/unsupported -> blocked
+          enabled SysAdmin tool -> method-specific executor -> redacted evidence -> result
+          managed SQL or non-catalog mutation -> immutable proposal -> WAITING_APPROVAL
 ```
 
 Apply the gateway to agents, routines, watches, delegation, and retries. Reject direct network, shell, unrestricted Python evaluation, raw IRIS handles, and unregistered database access from model-generated content. Instructions embedded in API output or memory SHALL remain untrusted data.
 
 ## 7. ACTION PROPOSALS AND DBA APPROVAL
+
+This proposal protocol applies to managed SQL and other mutations outside the DBA-enabled SysAdmin catalog. An enabled SysAdmin operation follows the standing-authorization policy in Section 5.2 and does not create or wait for a per-call Action Proposal.
 
 ### 7.1 Immutable action envelope
 
@@ -363,14 +365,14 @@ module.xml              # IPM package metadata, if delivered
 |---|---|---|---|
 | P0 — Contract | Pin IRIS release, source commit/hash, supported API domains, Python dependencies, and deployment identity. | Compatibility inventory; no invented endpoints. | R1–R5 |
 | P1 — Foundation | Create schema migrations; deploy authenticated Python WSGI; prove worker SQL connectivity. | Fresh installation and authenticated persistence smoke test. | R2–R5 |
-| P2 — Registry | Import contracts; version operations; review read classification; implement restricted read gateway. | Every imported tool maps to the source; unsupported operations remain disabled. | R1 |
-| P3 — Safety | Implement proposals, exact payloads, DBA decisions, concurrency guards, dispatch ledger, SQL restrictions. | All approval and recovery tests in Section 18 pass before enabling mutations. | R1, R4, R5 |
+| P2 — Registry | Import contracts; version operations; build the DBA availability catalog and method-specific gateway. | Every imported tool maps to the source; all operations start disabled; unsupported shapes stay blocked. | R1 |
+| P3 — Safety | Implement proposals, exact payloads, DBA decisions, concurrency guards, dispatch ledger, and SQL restrictions for proposal-gated actions. | All proposal/recovery tests in Section 18 pass before enabling managed SQL mutations. | R1, R4, R5 |
 | P4 — Agents | Implement persisted prompts/agents, provider adapters, budgets, history, and constrained delegation. | DBA creates an agent in the GUI without editing Python. | R3–R5 |
 | P5 — Memory | Add extraction, VECTOR persistence, scoped retrieval, provenance, and embedding failure recovery. | A second authorized agent retrieves prior knowledge; unauthorized retrieval fails. | R6, R7 |
 | P6 — Watches | Add durable schedules, findings, alert lifecycle, deduplication, outbox, and monitoring freshness. | A watch detects a seeded condition and produces an approval-gated remediation proposal. | R8–R10 |
 | P7 — Release | Complete GUI, compatibility report, Docker/IPM artifacts, README, demo, and restore tests. | Reproducible installation and end-to-end demonstration. | R11, R12 |
 
-Do not enable mutation execution before P3 passes. Prioritize a complete read–finding–alert–proposal–approval–verified-action flow over unsupported breadth. Maintain a coverage matrix for web applications, permissions, security/secrets, tasks, operating-system resources, and logs; mark unsupported operations explicitly.
+Do not enable managed SQL or other proposal-gated mutation execution before P3 passes. SysAdmin operations use the standing DBA toggle in Section 5.2, with explicit automatic-execution warnings and a default-blocked state. Prioritize a complete read–finding–alert flow over unsupported breadth. Maintain a coverage matrix for web applications, permissions, security/secrets, tasks, operating-system resources, and logs; mark unsupported operations explicitly.
 
 ## 18. ACCEPTANCE AND SECURITY TESTS
 
@@ -378,8 +380,10 @@ Do not enable mutation execution before P3 passes. Prioritize a complete read–
 |---|---|
 | Reviewed authorized read | Executes without DBA interruption and records evidence. |
 | Unassigned or disabled tool | Denied before dispatch. |
-| Unknown classification or changed source hash | No automatic execution; affected approvals invalidated. |
-| API create/update/delete or side-effect command | Proposal exists; zero mutation before approval. |
+| Disabled or unsupported operation | Denied before dispatch, even when an agent still has a historical binding. |
+| Enabled mutating SysAdmin operation | Executes automatically only for an assigned agent; the DBA toggle is logged and no per-call approval is requested. |
+| Changed source hash or unsupported request shape | Operation remains blocked until the new pinned version is reviewed and enabled. |
+| Managed SQL mutation or non-catalog side-effect command | Proposal exists; zero mutation before approval. |
 | Mutable SQL, procedure, or disguised multi-statement input | Cannot bypass approval or SQL restrictions. |
 | Body, SQL bind, target, header, or tool-version tampering | Hash/authorization check fails; zero dispatch. |
 | Drift between proposal and execution | INVALIDATED; new approval required. |
@@ -420,7 +424,7 @@ Do not claim an unearned bonus. Run public demonstrations against disposable dat
 
 ## 20. RELEASE DEFINITION OF DONE
 
-RELEASE only when the DBA can create behavior through the GUI, restart the application without losing it, run reviewed reads automatically, receive evidence-backed alerts, and approve a precisely defined mutation that is checked and audited before execution.
+RELEASE only when the DBA can create behavior through the GUI, restart the application without losing it, enable or block pinned SysAdmin operations, and inspect evidence from automatic runs. Enabling a mutating operation is an explicit standing authorization; proposal-gated managed SQL remains subject to Section 7.
 
 DELIVER source, pinned dependencies, migrations, the pinned `specification/mainspec_v2.json`, provenance manifest, classification/coverage report, security test results, installation instructions, backup/restore procedure, and demonstration instructions. Confirm that Java/Quarkus are absent from the application backend and no model-facing path bypasses the approval gateway.
 

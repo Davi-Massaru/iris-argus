@@ -52,6 +52,7 @@ def _configure_worker():
         iris.system.Process.SetNamespace(previous)
     # Static trusted deployment DDL: no caller-selected identity/table.
     _sql("GRANT SELECT ON Agentic.AI_SCHEMA_MIGRATION TO AgenticWorker")
+    _sql("GRANT SELECT ON Agentic.AI_TOOL_VERSION TO AgenticWorker")
     for table in ('MVP_AGENT', 'MVP_RUN', 'MVP_CALL'):
         _sql(f"GRANT SELECT,INSERT,UPDATE ON Agentic.{table} TO AgenticWorker")
 
@@ -64,6 +65,7 @@ def _configure_mvp_security():
         for name, resource in [('AgenticViewer', '%DB_AGENTIC:R'),
                                ('AgenticAgentDesigner', '%DB_AGENTIC:RW'),
                                ('AgenticOperator', '%DB_AGENTIC:RW'),
+                               ('AgenticDBAApprover', '%DB_AGENTIC:RW'),
                                ('AgenticSysAdminReader', '%Admin_Operate:U')]:
             if not iris.cls('Security.Roles').Exists(name, iris.ref(None)):
                 status = iris.cls('Security.Roles').Create(name, 'Agentic MVP role', resource, '')
@@ -86,6 +88,10 @@ def _configure_mvp_security():
         for table in ('MVP_AGENT', 'MVP_RUN', 'MVP_CALL'):
             privileges = 'SELECT' if role == 'AgenticViewer' else 'SELECT,INSERT,UPDATE'
             _sql(f'GRANT {privileges} ON Agentic.{table} TO {role}')
+    for role in ('AgenticViewer', 'AgenticAgentDesigner', 'AgenticOperator', 'AgenticDBAApprover'):
+        _sql(f'GRANT SELECT ON Agentic.AI_TOOL_VERSION TO {role}')
+    _sql('GRANT SELECT,UPDATE ON Agentic.AI_TOOL_VERSION TO AgenticDBAApprover')
+    _sql('GRANT SELECT,INSERT ON Agentic.AI_TOOL_POLICY_OVERRIDE TO AgenticDBAApprover')
 
 
 def _split_statements(text: str) -> list[str]:

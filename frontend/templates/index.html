@@ -1,24 +1,24 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agentes DBA · IRIS</title><link rel="stylesheet" href="assets/style"></head>
+<title>DBA Agents · IRIS</title><link rel="stylesheet" href="assets/style"></head>
 <body>
-<header class="topbar"><div><p class="eyebrow">IRIS · PLATAFORMA DE DIAGNÓSTICO</p><h1>Agentes DBA</h1></div><div class="identity">{{ principal.name }}<small>{{ principal.roles|join(', ') }}</small></div></header>
+<header class="topbar"><div><p class="eyebrow">IRIS · DIAGNOSTICS PLATFORM</p><h1>DBA Agents</h1></div><div class="identity">{{ principal.name }}<small>{{ principal.roles|join(', ') }}</small></div></header>
 <main>
-<section class="hero"><div><p class="eyebrow">SEU AMBIENTE, SUAS INSTRUÇÕES</p><h2>Agentes criados por você.</h2><p>Configure tarefas, escolha as ferramentas e acompanhe as evidências.</p></div><button id="new-agent">Criar agente</button></section>
+<section class="hero"><div><p class="eyebrow">YOUR ENVIRONMENT, YOUR INSTRUCTIONS</p><h2>Agents built by you.</h2><p>Configure tasks, choose tools, and review the evidence.</p></div><button id="new-agent">Create agent</button></section>
 <p id="notice" role="status" aria-live="polite"></p>
-<section class="panel"><div class="panel-heading"><h3>Agentes cadastrados <span id="agent-count">0</span></h3><button id="refresh" class="secondary">Atualizar</button></div><div id="agent-list" class="cards"><p>Carregando…</p></div></section>
+<section class="panel"><div class="panel-heading"><h3>Registered agents <span id="agent-count">0</span></h3><button id="refresh" class="secondary">Refresh</button></div><div id="agent-list" class="cards"><p>Loading...</p></div></section>
 <section class="panel" id="editor" hidden>
-<div class="panel-heading"><h3 id="editor-title">Criar agente</h3><button id="close-editor" class="secondary">Fechar</button></div>
+<div class="panel-heading"><h3 id="editor-title">Create agent</h3><button id="close-editor" class="secondary">Close</button></div>
 <form id="agent-form">
-<div class="form-grid"><label>Nome<input id="name" required maxlength="120" placeholder="Nome do agente"></label><label>Modelo Ollama<input id="model" required maxlength="100" value="qwen2.5:3b"></label></div>
-<label>Instruções do agente<textarea id="prompt" rows="3" maxlength="6000" required placeholder="Defina o papel, o contexto e como o agente deve relatar os resultados."></textarea></label>
-<label>Tarefa / skill<textarea id="task" rows="4" maxlength="6000" required placeholder="Descreva o que consultar, quais condições avaliar e qual relatório produzir."></textarea></label>
-<div class="form-grid"><label>Intervalo em segundos (0 = somente manual)<input id="interval" type="number" min="0" max="86400" value="0" required></label><label class="check"><input id="enabled" type="checkbox" checked> Ativo</label></div>
-<fieldset><legend>Ferramentas permitidas</legend><p>Selecione até 12 consultas. Parâmetros fixos são opcionais e não podem ser alterados pelo agente.</p><div id="tool-picker"></div></fieldset>
-<div class="actions"><button type="submit" id="save-agent">Salvar agente</button><span>Instruções e configuração ficam salvas no IRIS.</span></div>
+<div class="form-grid"><label>Name<input id="name" required maxlength="120" placeholder="Agent name"></label><label>Ollama model<input id="model" required maxlength="100" value="qwen2.5:3b"></label></div>
+<label>Agent instructions<textarea id="prompt" rows="3" maxlength="6000" required placeholder="Define the agent's role, context, and how it should report results."></textarea></label>
+<label>Task / skill<textarea id="task" rows="4" maxlength="6000" required placeholder="Describe what to query, which conditions to evaluate, and what report to produce."></textarea></label>
+<div class="form-grid"><label>Interval in seconds (0 = manual only)<input id="interval" type="number" min="0" max="86400" value="0" required></label><label class="check"><input id="enabled" type="checkbox" checked> Enabled</label></div>
+<fieldset><legend>Allowed tools</legend><p>Select up to 12 queries. Fixed parameters are optional and cannot be changed by the agent.</p><div id="tool-picker"></div></fieldset>
+<div class="actions"><button type="submit" id="save-agent">Save agent</button><span>Instructions and configuration are stored in IRIS.</span></div>
 </form></section>
-<section class="panel"><div class="panel-heading"><h3>Execuções e relatórios</h3><span class="pill safe">Somente leitura</span></div><div class="table-wrap"><table><thead><tr><th>Agente</th><th>Início</th><th>Estado</th><th>Detalhes</th></tr></thead><tbody id="run-list"></tbody></table></div></section>
-<section class="panel" id="run-detail" hidden><div class="panel-heading"><h3>Relatório e evidências</h3><button id="close-detail" class="secondary">Fechar</button></div><div id="report-body"></div></section>
-<details class="panel"><summary>Catálogo SysAdmin — <span id="catalog-count">0</span> operações</summary><p class="catalog-note">As consultas revisadas estão disponíveis no formulário. As demais operações ficam bloqueadas neste MVP.</p><div class="table-wrap"><table><thead><tr><th>Método</th><th>Operação</th><th>Disponibilidade</th></tr></thead><tbody id="catalog-list"></tbody></table></div></details>
+<section class="panel"><div class="panel-heading"><h3>Runs and reports</h3><span class="pill safe">Read-only</span></div><div class="table-wrap"><table><thead><tr><th>Agent</th><th>Started</th><th>Status</th><th>Details</th></tr></thead><tbody id="run-list"></tbody></table></div></section>
+<section class="panel" id="run-detail" hidden><div class="panel-heading"><h3>Report and evidence</h3><button id="close-detail" class="secondary">Close</button></div><div id="report-body"></div></section>
+<details class="panel"><summary>SysAdmin catalog — <span id="catalog-count">0</span> operations</summary><p class="catalog-note">Reviewed queries are available in the form. Other operations are blocked in this MVP.</p><div class="table-wrap"><table><thead><tr><th>Method</th><th>Operation</th><th>Availability</th></tr></thead><tbody id="catalog-list"></tbody></table></div></details>
 </main><script src="assets/script" defer></script></body></html>

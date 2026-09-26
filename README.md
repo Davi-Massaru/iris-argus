@@ -4,6 +4,10 @@ IRIS DBA Agents is a self-hosted control plane for AI-assisted InterSystems IRIS
 
 The project follows a simple rule: the model may reason, but the platform controls access. Agents can call only operations that a DBA has enabled and explicitly assigned to them. Every call is validated against a pinned SysAdmin OpenAPI contract and stored with its arguments, outcome, and returned evidence.
 
+This project is an entry in the [InterSystems Programming Contest: Build Your Own Management Portal](https://community.intersystems.com/post/intersystems-programming-contest-build-your-own-management-portal). Its proposal is a new administrative model for IRIS: instead of limiting the DBA to a fixed dashboard, the portal lets an administrator assemble purpose-built, evidence-driven agents from the IRIS SysAdmin API catalog. The DBA defines the mission, the available operations, fixed parameters, and the execution cadence; the platform supplies the controlled runtime and audit trail.
+
+> **The catalog is the administrative building set.** A DBA can create agents for health audits, capacity reviews, lock investigation, automatic alerts, scheduled checks, task creation, or incident response. Read and mutating operations can be combined when the target identity and catalog policy allow them. The practical limit is the administrator's operational design—not a hard-coded dashboard—while the tool allowlist, IRIS privileges, fixed parameters, and evidence record keep that freedom governed.
+
 ## Why It Exists
 
 Operational AI is useful only when access, evidence, and accountability are visible. IRIS DBA Agents provides:
@@ -17,6 +21,8 @@ Operational AI is useful only when access, evidence, and accountability are visi
 - IRIS-native authentication, authorization, and persistence.
 
 This repository currently delivers an MVP. It is not a general-purpose autonomous operations platform, a notification service, or a complete observability suite.
+
+The current MVP implements the agent editor, shared tool governance, manual and interval-based execution, IRIS persistence, report inspection, and per-call evidence. The broader `AI_*` schema contains foundations for future alerting, proposals, routines, memory, and richer workflows; those foundation tables should not be confused with active MVP features. Today, an agent can still invoke approved SysAdmin task operations and other mutating endpoints, as demonstrated below, but deterministic alert delivery is not yet a standalone subsystem.
 
 ## Current Capabilities
 
@@ -33,6 +39,143 @@ This repository currently delivers an MVP. It is not a general-purpose autonomou
 - Use Ollama locally or OpenAI through deployment configuration.
 
 Enabling an operation is standing authorization for assigned agents to invoke it automatically, including during scheduled runs. There is no approval prompt for each call. A DBA must review mutating operations before enabling them.
+
+## Product Tour
+
+The screenshots below come from the running application. They show the current implementation rather than design mockups.
+
+### Registered agents
+
+![Registered agents and recent runs](docs/screenshots/dashboard.png)
+
+The main workspace lists every shared DBA agent, its current enabled or paused state, task, model, schedule, and number of assigned tools. A designer can edit an agent, an operator can run it immediately, and authorized users can pause or enable it. The **Runs and reports** area records recent executions and distinguishes succeeded, partial, failed, running, and queued states.
+
+Use this area to:
+
+1. Review the administrative agents already available to the team.
+2. Select **Run now** for an on-demand investigation.
+3. Select **Edit** to change an agent's instructions, task, cadence, or approved operations.
+4. Open **View report** after completion to inspect the report and its evidence.
+
+### Create or edit an agent
+
+![Create an evidence-driven DBA agent](docs/screenshots/agent-configuration.png)
+
+The editor turns an operational idea into a reusable agent. The example above defines a **Storage Growth and Journal Risk Sentinel**, saved and executed in the walkthrough below. It is manual-only (`0`) for the demonstration; use `3600` to schedule an hourly check after reviewing its behavior and provider costs. The fields have distinct responsibilities:
+
+- **Name** identifies the operational capability for other administrators.
+- **Model** shows the deployment-selected model used for reasoning.
+- **Agent instructions** define the agent's role, evidence discipline, boundaries, and reporting style.
+- **Task / skill** states the concrete outcome for each run.
+- **Interval** is `0` for manual-only execution or 60–86,400 seconds for scheduled execution.
+- **Enabled** controls whether the agent may be run or scheduled.
+
+The same form is used to edit an existing agent. Saving creates or updates the registration in `Agentic.MVP_AGENT`; every run later receives an immutable copy of that configuration.
+
+### Choose approved queries
+
+![Choose approved SysAdmin queries](docs/screenshots/create-agent.png)
+
+**Choose approved queries** is the per-agent tool allowlist. These operations are generated from the pinned [`specification/mainspec_v2.json`](specification/mainspec_v2.json) contract. They are the exact SysAdmin API operations through which the agent communicates with the target IRIS instance—such as reading system resources, listing locks, inspecting processes, creating or updating an IRIS task, or running that task.
+
+Only operations that the DBA has enabled in the shared catalog appear here. The designer may assign up to 12 operations and may pin fixed JSON parameters. A pinned value cannot be replaced by the model: if an agent is assigned `GET /v2/locks` with `{"maxRows":100}`, a conflicting model request is rejected before any network call.
+
+The HTTP method is an important operational signal:
+
+- `GET` and `HEAD` usually inspect IRIS state.
+- `POST` can create or invoke an operation.
+- `PUT` and `PATCH` usually update configuration.
+- `DELETE` usually removes state.
+
+The method alone is not a safety classification. The DBA should read the operation description, confirm the required IRIS privilege, and verify support in the target IRIS release.
+
+### Tool availability and SysAdmin catalog
+
+![Tool availability and SysAdmin catalog](docs/screenshots/sysadmin-catalog.png)
+
+The shared catalog is the administrative control plane. It imports 276 operations from the pinned SysAdmin specification and starts with all operations blocked. On a new deployment, a reviewed preset enables 18 read-only operations; a DBA approver can restore that preset, block the complete catalog, search the specification, or enable individual operations. The screenshot reflects a configured demonstration environment, so its enabled count can be higher than the default preset.
+
+Catalog availability and agent assignment are separate gates: an operation must be enabled globally **and** assigned to the specific agent. Immediately before dispatch, the gateway checks both gates again, verifies the pinned contract hash and arguments, applies fixed parameters, and uses the configured server-side IRIS identity. Enabling a mutating or sensitive operation requires explicit acknowledgment in the UI.
+
+This is what makes the portal extensible. A DBA is free to build agents that only observe, agents that raise operational findings, or tightly scoped agents that create and run IRIS tasks in response to identified conditions. The administrator chooses the capabilities; IRIS roles and the portal policy determine what can actually execute.
+
+### Runs and reports — inspect activity before opening details
+
+![Runs and reports showing the saved sentinel, succeeded runs, partial runs, and failures](docs/screenshots/runs-overview.png)
+
+This is the execution overview, **before opening any report popup**. The first row is the newly saved **Storage Growth and Journal Risk Sentinel**, which completed successfully. Earlier runs remain visible with **Succeeded**, **Partial**, and **Failed** outcomes, making incomplete investigations visible instead of hiding them behind a report.
+
+1. In **Registered agents**, select **Run now** on an enabled agent.
+2. Follow its row in **Runs and reports**. **Queued** means it awaits the worker; **Running** means execution is in progress. Use **Refresh** to reload activity.
+3. Review the final status: **Succeeded** means the runtime completed with successful tool evidence and no recorded tool failure; **Partial** means the run needs investigation, such as a failed tool call despite other useful evidence. Neither status certifies that every model conclusion is correct.
+4. Sort by agent, start time, or status, and use pagination for older runs. Only then select **View report** to examine instructions, conclusions, and individual calls.
+
+### Practical example — save, run, and audit the sentinel
+
+This example was actually saved to IRIS and run from the frontend on **September 26, 2026, at 3:17:36 PM** (browser-local time), not left as an unsaved form. Revision **1** finished **Succeeded**, with all three assigned tools recording **SUCCEEDED**.
+
+To reproduce it, fill the editor as shown above, leave **Enabled** checked, set the interval to `0`, and select these three approved operations:
+
+| Approved operation | Purpose | Fixed parameters |
+| --- | --- | --- |
+| `GET /v2/journal/files` | Inventory journal files and their reported sizes | `{"maxRows":100}` |
+| `GET /v2/monitor/dashboard/system-resources` | Inspect current resource counters | None |
+| `GET /v2/monitor/system-usage/shared-memory` | Inspect shared-memory allocation and usage | None |
+
+Select **Save agent**, locate the saved registration, and select **Run now**. The task requests a current snapshot, evidence IDs, data gaps, and DBA follow-up. It explicitly prohibits configuration changes and task execution. The name describes the monitoring objective; a single run cannot establish a growth trend or prove that disk capacity is sufficient.
+
+![Saved sentinel report with its successful execution status](docs/screenshots/sentinel-report.png)
+
+In this execution, the journal evidence returned **four files** with `Size` values of **1,048,576**, **229,376**, **372,736**, and **69,632 bytes**. The report also summarized resource and shared-memory observations and recommended establishing a baseline for later comparison. These are demonstration-instance observations, not expected values for another installation. A zero-valued memory category alone is not proof of an incident; the DBA must assess the returned fields and workload context.
+
+![Sentinel recommendations followed by all three successful tool calls and evidence IDs](docs/screenshots/sentinel-evidence.png)
+
+The recorded audit path is:
+
+| Order | Tool | Evidence ID |
+| --- | --- | --- |
+| 1 | `get_v2_journal_files` | `1e2a21c1-6cc7-490d-ab6a-e63311f0f2dc` |
+| 2 | `get_v2_monitor_dashboard_system_resources` | `7cd2cf3c-59a3-453c-ba1d-c3f079b33d3f` |
+| 3 | `get_v2_monitor_system_usage_shared_memory` | `5cbfc298-5447-46ca-aee9-798bbe23d728` |
+
+The practical value is a repeatable DBA inspection with a traceable source for each observation. After validating it, an administrator can schedule repeated checks or design a separate incident-response agent with explicitly approved task operations. This example itself does not send notifications, mutate IRIS settings, or implement historical trend detection.
+
+### Report and evidence
+
+![Agent report and ordered tool path](docs/screenshots/report-evidence.png)
+
+The report drawer is the most important audit surface. It shows the model's final report and, directly beneath it, the ordered path of tools that the agent actually executed. Each row records the tool name, outcome, and immutable evidence ID. In the demonstrated run, the agent:
+
+1. Read current system-resource data.
+2. Read the current lock table.
+3. Looked for the target IRIS task.
+4. Submitted a task-creation request.
+5. Queried the task list again.
+6. Submitted an immediate task-run request.
+
+Those calls prove which operations were invoked, not that the model selected the intended task correctly. In this older demonstration, the report described task ID `1` as assumed. A production workflow must obtain and verify the exact identifier from returned evidence before taking action; a green run status is not a substitute for that check.
+
+This sequence is not inferred from prose: it is reconstructed from persisted `Agentic.MVP_CALL` rows. A run cannot be marked successful without at least one successful tool call, and the runtime appends missing evidence IDs to the final report.
+
+![Expanded tool arguments and returned evidence](docs/screenshots/tool-evidence-detail.png)
+
+Expand any tool row to inspect its validated arguments and the result returned by IRIS. This lets a DBA verify which observation supported a claim, which identifier was used for an action, and whether the call succeeded or failed. Recognized password-, secret-, token-, credential-, authorization-, and API-key-like fields are redacted before evidence is persisted.
+
+### SQL verification of agent activity
+
+The application stores its active runtime state in the `Agentic` SQL schema, so the UI audit trail can also be independently verified with standard IRIS SQL.
+
+![Registered agent rows in IRIS SQL](docs/screenshots/sql-registered-agents.png)
+
+The registered-agent query confirms that configuration, revision, enabled state, cadence, assigned tools, and update identity are persisted in IRIS.
+
+![Recent agent runs in IRIS SQL](docs/screenshots/sql-agent-runs.png)
+
+The run query exposes immutable execution snapshots and final states, including partial and failed outcomes rather than hiding them.
+
+![Persisted tool calls and evidence IDs in IRIS SQL](docs/screenshots/sql-tool-evidence.png)
+
+The joined evidence query shows the real administrative path: evidence ID, agent, run state, tool key, call outcome, validated arguments, and timestamp. In the demonstration, the SQL rows prove that the agent read resources and locks, searched for a task, created it, and invoked it with `RunNow`.
 
 ## System Architecture
 
@@ -152,6 +295,20 @@ SELECT StableKey, Method, PathTemplate, Classification, Risk, ContractHash
 FROM Agentic.AI_TOOL_VERSION
 WHERE Enabled = 1
 ORDER BY PathTemplate, Method;
+
+-- Auditable tool path across agents, runs, and evidence
+SELECT TOP 20
+    c.ID AS EvidenceID,
+    a.Name AS Agent,
+    r.State,
+    c.ToolKey,
+    c.Outcome,
+    c.ArgumentsJSON,
+    c.CreatedAt
+FROM Agentic.MVP_CALL c
+JOIN Agentic.MVP_RUN r ON r.ID = c.RunID
+JOIN Agentic.MVP_AGENT a ON a.ID = r.AgentID
+ORDER BY c.CreatedAt DESC;
 ```
 
 ## Security Model

@@ -1,0 +1,9 @@
+[Actions]
+ModifyService:Name=%Service_CallIn,Enabled=1,AutheEnabled=32
+CreateResource:Name=%DB_AGENTIC,Description="Agentic administration platform data"
+CreateDatabase:Name=AGENTIC,Directory=/usr/irissys/mgr/agentic,Resource=%DB_AGENTIC
+CreateNamespace:Name=AGENTIC,Globals=AGENTIC,Routines=AGENTIC
+CreateApplication:Name=/agentic,NameSpace=AGENTIC,WSGIAppLocation=/opt/agentic,WSGIAppName=app.wsgi,WSGICallable=application,Type=2,DispatchClass=%SYS.Python.WSGI,WSGIDebug=0,WSGIType=1,AutheEnabled=32,ServeFiles=0
+
+[Startup]
+SystemMode=Agentic IRIS Administration

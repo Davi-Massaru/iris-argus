@@ -1,0 +1,67 @@
+import json
+import os
+from pathlib import Path
+from urllib.parse import urlparse
+
+import requests
+from jsonschema import Draft7Validator
+from app.mvp.catalog import tool_by_key
+
+
+class ToolError(ValueError):
+    pass
+
+
+class Gateway:
+    def __init__(self, bindings, transport=None):
+        self.bindings = {b['key']: b.get('fixed', {}) for b in bindings}
+        self.transport = transport or requests.Session()
+        self.transport.trust_env = False
+
+    def execute(self, key, arguments):
+        if key not in self.bindings:
+            raise ToolError('TOOL_NOT_ASSIGNED')
+        item = tool_by_key(key)
+        if not isinstance(arguments, dict):
+            raise ToolError('INVALID_ARGUMENTS')
+        fixed = self.bindings[key]
+        if any(k in arguments and arguments[k] != v for k, v in fixed.items()):
+            raise ToolError('FIXED_PARAMETER_OVERRIDE')
+        params = {**arguments, **fixed}
+        if list(Draft7Validator(item['schema']).iter_errors(params)):
+            raise ToolError('INVALID_ARGUMENTS')
+        if len(json.dumps(params)) > 3500:
+            raise ToolError('ARGUMENTS_TOO_LARGE')
+        if 'maxRows' in item['schema']['properties']:
+            value = params.setdefault('maxRows', 200)
+            if not 1 <= value <= 500:
+                raise ToolError('MAX_ROWS_RANGE_1_500')
+        base = os.environ.get('AGENTIC_SYSADMIN_URL', 'http://127.0.0.1:52773/api/admin').rstrip('/')
+        parsed = urlparse(base)
+        if parsed.scheme not in {'http', 'https'} or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ToolError('INVALID_TARGET_CONFIGURATION')
+        username = os.environ.get('AGENTIC_SYSADMIN_USER')
+        password = os.environ.get('AGENTIC_SYSADMIN_PASSWORD')
+        if not username:
+            if base != 'http://127.0.0.1:52773/api/admin':
+                raise ToolError('TARGET_CREDENTIALS_REQUIRED')
+            credential = json.loads(Path('/usr/irissys/mgr/agentic/sysadmin-credential.json').read_text())
+            username, password = credential['username'], credential['password']
+        try:
+            with self.transport.get(base + item['path'], params=params, auth=(username, password),
+                                    timeout=(5, 20), allow_redirects=False, stream=True) as response:
+                if response.status_code != 200:
+                    raise ToolError(f'SYSADMIN_HTTP_{response.status_code}')
+                data = bytearray()
+                for chunk in response.iter_content(4096):
+                    data.extend(chunk)
+                    if len(data) > 24000:
+                        raise ToolError('RESPONSE_TOO_LARGE_USE_FILTER_OR_MAXROWS')
+                result = json.loads(data)
+        except (requests.RequestException, json.JSONDecodeError):
+            raise ToolError('SYSADMIN_UNAVAILABLE_OR_INVALID_JSON') from None
+        if isinstance(result, dict) and result.get('status', {}).get('errors'):
+            raise ToolError('SYSADMIN_REPORTED_ERRORS')
+        if len(json.dumps(result)) > 30000:
+            raise ToolError('RESPONSE_TOO_LARGE_USE_FILTER_OR_MAXROWS')
+        return result

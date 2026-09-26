@@ -1,0 +1,8 @@
+{
+  "source": "https://github.com/intersystems-community/sysadmin-api-specification/blob/f764aea427e5c0b1dd08a4c18a0457e0ff7b3b34/mainspec_v2.json",
+  "commit": "f764aea427e5c0b1dd08a4c18a0457e0ff7b3b34",
+  "retrieved_at": "2026-09-24T00:55:13Z",
+  "sha256": "1ab154c7c5d9b25e6b227944a44a120c670686f876c2e14abfb9ee5898596650",
+  "target_iris": "2026.2 Community Edition",
+  "review_state": "All imported operations begin UNKNOWN and disabled. Classification requires a separate reviewed activation."
+}

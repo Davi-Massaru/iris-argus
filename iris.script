@@ -1,0 +1,6 @@
+zn "%SYS"
+do ##class(Security.Users).UnExpireUserPasswords("*")
+zn "AGENTIC"
+set runner=##class(%SYS.Python).Import("runpy")
+do runner."run_path"("/opt/agentic/scripts/embedded_check.py")
+halt

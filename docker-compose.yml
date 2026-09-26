@@ -1,9 +1,26 @@
-name: argus-iris
+name: agentic-iris
 services:
-  app:
+  iris:
     build: .
+    init: true
+    command: ["--check-caps", "false", "--after", "/opt/agentic/scripts/startup.sh"]
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${AGENTIC_IRIS_PORT:-52774}:52773"
+    environment:
+      AGENTIC_ENV: ${AGENTIC_ENV:-development}
+      AGENTIC_OLLAMA_URL: ${AGENTIC_OLLAMA_URL:-http://ollama:11434}
+      AGENTIC_MODEL: ${AGENTIC_MODEL:-qwen2.5:3b}
+      AGENTIC_SYSADMIN_URL: ${AGENTIC_SYSADMIN_URL:-http://127.0.0.1:52773/api/admin}
+      AGENTIC_SYSADMIN_USER: ${AGENTIC_SYSADMIN_USER:-}
+      AGENTIC_SYSADMIN_PASSWORD: ${AGENTIC_SYSADMIN_PASSWORD:-}
+    volumes:
+      - agentic-data:/usr/irissys/mgr/agentic
+    healthcheck:
+      test: ["CMD", "python3", "/opt/agentic/scripts/readiness.py"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
   ollama:
     image: ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
     profiles: [local-llm]
@@ -19,4 +36,6 @@ services:
       timeout: 5s
       retries: 20
 volumes:
+  agentic-data:
   ollama-models:
+    name: argus-iris_ollama-models

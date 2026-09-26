@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="IRIS" version="26">
+  <Document name="agentic-iris-admin.ZPM">
+    <Module>
+      <Name>agentic-iris-admin</Name>
+      <Version>0.1.0</Version>
+      <Description>DBA-configurable agentic administration platform for InterSystems IRIS</Description>
+      <Packaging>module</Packaging>
+      <SourcesRoot>src</SourcesRoot>
+    </Module>
+  </Document>
+</Export>

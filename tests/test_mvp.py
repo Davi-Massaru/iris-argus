@@ -325,7 +325,7 @@ def test_runtime_records_evidence_and_uses_saved_prompt():
     model = Model(
         [
             AIMessage(content="", tool_calls=[{"id": "c1", "name": "get_v2_locks", "args": {}}]),
-            AIMessage(content="No locks. Evidence evidence-1."),
+            AIMessage(content="No locks."),
         ]
     )
 
@@ -339,6 +339,27 @@ def test_runtime_records_evidence_and_uses_saved_prompt():
     execute("run-1", repo, lambda *_: model, ReadGateway)
     assert repo.calls[0][1] == "get_v2_locks"
     assert repo.finished[1] == "SUCCEEDED"
+    assert repo.finished[2].endswith("Evidence IDs: evidence-1")
+
+
+def test_runtime_does_not_duplicate_evidence_id_already_in_report():
+    repo = FakeRepo()
+    model = Model(
+        [
+            AIMessage(content="", tool_calls=[{"id": "c1", "name": "get_v2_locks", "args": {}}]),
+            AIMessage(content="No locks. Evidence evidence-1."),
+        ]
+    )
+
+    class ReadGateway:
+        def __init__(self, bindings):
+            pass
+
+        def execute(self, key, args):
+            return {"result": []}
+
+    execute("run-1", repo, lambda *_: model, ReadGateway)
+    assert repo.finished[2].count("evidence-1") == 1
 
 
 def test_runtime_rebinds_legacy_agent_to_deployment_provider(monkeypatch):

@@ -63,6 +63,13 @@ def model_evidence(result):
     return result
 
 
+def report_with_evidence_ids(report, evidence_ids):
+    missing = [item for item in evidence_ids if item not in report]
+    if not missing:
+        return report
+    return report.rstrip() + "\n\nEvidence IDs: " + ", ".join(missing)
+
+
 def execute(run_id, repository, model_factory=chat_model, gateway_factory=Gateway):
     run = repository.get_run(run_id)
     config = run["snapshot"]
@@ -94,6 +101,7 @@ def execute(run_id, repository, model_factory=chat_model, gateway_factory=Gatewa
         HumanMessage(content=config["prompt"] + "\nTAREFA:\n" + config["task"]),
     ]
     successes, calls, failures = 0, 0, 0
+    evidence_ids = []
     for _ in range(8):
         response = model.invoke(messages)
         messages.append(response)
@@ -106,6 +114,7 @@ def execute(run_id, repository, model_factory=chat_model, gateway_factory=Gatewa
             )
             if not report.strip():
                 raise ToolError("EMPTY_REPORT")
+            report = report_with_evidence_ids(report, evidence_ids)
             repository.finish(
                 run_id,
                 "PARTIAL" if failures else "SUCCEEDED",
@@ -136,6 +145,7 @@ def execute(run_id, repository, model_factory=chat_model, gateway_factory=Gatewa
             evidence = repository.record_call(
                 run_id, key[:100], redact_sensitive(safe_args), result, outcome
             )
+            evidence_ids.append(evidence)
             messages.append(
                 ToolMessage(
                     content=json.dumps({"evidence_id": evidence, "data": model_evidence(result)}),

@@ -1,189 +1,389 @@
 # IRIS DBA Agents
 
-IRIS DBA Agents is a self-hosted MVP for configuring AI-assisted database administration tasks and reviewing their results. A DBA controls which operations from the pinned IRIS SysAdmin OpenAPI contract are available, then configures agents with instructions, tasks, an Ollama model, and selected available tools. Agents can call enabled operations and return reports with tool-call evidence.
+IRIS DBA Agents is a self-hosted control plane for AI-assisted InterSystems IRIS administration. It gives database teams a practical way to configure focused DBA agents, constrain the operations they may use, run them manually or on a schedule, and inspect every report together with its supporting tool evidence.
 
-On first startup, 18 explicitly reviewed read-only GET operations are enabled for quick use; all other operations start blocked. Enabling any additional operation is a standing authorization for assigned agents to invoke it automatically, including scheduled runs; there is no approval prompt for each call. A DBA is responsible for reviewing the operation and its consequences before enabling it. Task conditions are interpreted by a language model, so verify reports and evidence.
+The project follows a simple rule: the model may reason, but the platform controls access. Agents can call only operations that a DBA has enabled and explicitly assigned to them. Every call is validated against a pinned SysAdmin OpenAPI contract and stored with its arguments, outcome, and returned evidence.
 
-## What You Can Do
+## Why It Exists
+
+Operational AI is useful only when access, evidence, and accountability are visible. IRIS DBA Agents provides:
+
+- A shared web workspace for DBAs and operators.
+- Agent configuration in natural language without executable task text.
+- A centrally controlled catalog of IRIS SysAdmin operations.
+- Manual and interval-based execution.
+- Reports backed by persisted tool-call evidence.
+- Local inference with Ollama or an OpenAI deployment.
+- IRIS-native authentication, authorization, and persistence.
+
+This repository currently delivers an MVP. It is not a general-purpose autonomous operations platform, a notification service, or a complete observability suite.
+
+## Current Capabilities
 
 - Create, edit, enable, and pause shared DBA agents.
-- Write agent instructions and describe a task in natural language.
-- Select up to 12 DBA-enabled SysAdmin operations and optionally set fixed parameters.
-- Search all operations in the pinned SysAdmin contract and block or enable each supported operation from the catalog.
-- Run an agent on demand or schedule it at an interval.
-- Review run status, the generated report, instructions used, tool calls, arguments, and returned evidence.
-- Use the reviewed SysAdmin catalog to see which operations are available to agents.
+- Define agent instructions and one natural-language task.
+- Select between 1 and 12 enabled SysAdmin operations per agent.
+- Pin fixed operation parameters that the model cannot override.
+- Run agents on demand or every 60 to 86,400 seconds.
+- Review queued, running, successful, partial, failed, and cancelled runs.
+- Inspect the final report, configuration snapshot, tool arguments, results, outcomes, and evidence IDs.
+- Search the 276-operation pinned SysAdmin contract.
+- Enable or block individual supported operations.
+- Restore the 18 reviewed read-only operations or block the entire catalog.
+- Use Ollama locally or OpenAI through deployment configuration.
 
-The pinned contract contains 276 operations: GET, POST, PUT, DELETE, and HEAD. The first startup enables only the 18 reviewed read-only queries; all other operations remain blocked. A DBA can enable any supported operation, including operations that change state; only enabled operations can be assigned to agents. Ollama is the default model provider; OpenAI can be selected through deployment settings. Agent task text is not executable code, and model interpretations should be checked against returned evidence.
+Enabling an operation is standing authorization for assigned agents to invoke it automatically, including during scheduled runs. There is no approval prompt for each call. A DBA must review mutating operations before enabling them.
 
-The default read set is maintained in [reviewed_read_operations.json](specification/reviewed_read_operations.json), separate from the upstream API contract. `docker compose build` checks its SHA-256 against the pinned contract and rejects unknown, unsupported, sensitive, duplicate, or non-GET entries before producing the runtime image.
-
-## How It Works
+## System Architecture
 
 ```text
-Browser -> IRIS web application (Flask/WSGI) -> IRIS database
-                                             ^
-                                             |
-Ollama <- Embedded Python worker <- run queue
-                       |
-                       +-> availability-gated SysAdmin API gateway
+                                      model request / tool decision
+                              +--------------------------------------+
+                              |                                      v
++---------+   HTTPS/HTTP   +--+-------------------+           +--------------+
+| Browser |--------------->| IRIS WSGI application|           | Ollama or    |
+|         |<---------------| Flask + static UI    |           | OpenAI       |
++---------+                 +----------+-----------+           +------+-------+
+                                       | SQL                           |
+                                       v                               |
+                            +----------+-----------+                   |
+                            | InterSystems IRIS    |                   |
+                            | configuration, queue,|                   |
+                            | runs, and evidence   |                   |
+                            +----------+-----------+                   |
+                                       ^                               |
+                                       | claim / update                |
+                            +----------+-----------+                   |
+                            | Embedded Python     |<------------------+
+                            | worker + scheduler  |
+                            +----------+----------+
+                                       |
+                                       | validated server-side request
+                                       v
+                            +----------------------+
+                            | IRIS SysAdmin API    |
+                            | fixed target gateway |
+                            +----------------------+
 ```
 
-IRIS stores agent configurations, tool availability, run history, and tool-call evidence. A worker inside the IRIS container claims queued runs, calls the configured Ollama model, checks tool availability before dispatch, and routes requests through a server-side SysAdmin gateway. The browser does not receive gateway credentials. Recognized password, token, and credential fields are redacted from stored tool evidence.
+### Components
+
+| Component | Implementation | Responsibility |
+| --- | --- | --- |
+| Web application | Flask running as an IRIS WSGI application | Serves the UI and authenticated API under `/agentic` |
+| Web client | HTML, CSS, and browser JavaScript | Manages agents, catalog availability, runs, and report inspection |
+| Database | InterSystems IRIS namespace `AGENTIC` | Stores migrations, tools, agents, runs, calls, reports, and policy history |
+| Worker | Embedded Python process inside the IRIS container | Schedules runs, claims the queue, invokes the model, and persists results |
+| Model adapter | LangChain with Ollama or OpenAI | Produces tool calls and the final English report |
+| SysAdmin gateway | Server-side Python HTTP client | Enforces tool assignment, contract version, availability, schema, size, timeout, and target rules |
+| Supervisor | Python process inside the IRIS container | Restarts the worker with a bounded retry policy and maintains readiness state |
+
+The browser never receives model-provider secrets or SysAdmin gateway credentials.
+
+## Execution Flow
+
+1. A designer saves an agent configuration.
+2. The application validates its model, interval, assigned tools, and fixed parameters.
+3. A manual action or the scheduler creates an immutable run snapshot in `MVP_RUN`.
+4. The single worker claims the oldest queued run.
+5. The model receives the saved instructions, task, and only the assigned tool definitions.
+6. Every requested call passes through the gateway.
+7. The gateway confirms that the tool is assigned, still enabled, pinned to the current contract, and supplied with valid arguments.
+8. The gateway calls the configured IRIS SysAdmin API without redirects and with bounded time and response size.
+9. Arguments, redacted results, outcome, and evidence ID are stored in `MVP_CALL`.
+10. The model produces a report. The runtime guarantees that recorded evidence IDs are included.
+11. The run is finalized and the agent execution slot is released.
+
+A run cannot succeed without at least one successful tool call.
+
+## Technical Persistence Map
+
+IRIS stores runtime data in the `Agentic` SQL schema within the `AGENTIC` namespace.
+
+### Active MVP tables
+
+| Table | What it stores | Important fields |
+| --- | --- | --- |
+| `Agentic.MVP_AGENT` | Current agent registration and scheduling state | `ID`, `Name`, `ConfigJSON`, `Revision`, `Enabled`, `IntervalSeconds`, `NextDue`, `ActiveRun`, `UpdatedBy`, `UpdatedAt` |
+| `Agentic.MVP_RUN` | Execution queue, immutable agent snapshot, report, and final state | `ID`, `AgentID`, `SnapshotJSON`, `State`, `TriggerKind`, `Actor`, `CreatedAt`, `StartedEpoch`, `FinishedAt`, `Report`, `ErrorCode` |
+| `Agentic.MVP_CALL` | Tool calls and evidence for each run | `ID`, `RunID`, `ToolKey`, `ArgumentsJSON`, `ResultJSON`, `Outcome`, `CreatedAt` |
+| `Agentic.AI_TOOL` | Stable identity of each imported SysAdmin operation | `ID`, `StableKey`, `Source`, `CreatedAt` |
+| `Agentic.AI_TOOL_VERSION` | Pinned contract version, method, path, schema metadata, classification, risk, and availability | `StableKey`, `ContractHash`, `Method`, `PathTemplate`, `ParametersJSON`, `Classification`, `Risk`, `Enabled` |
+| `Agentic.AI_TOOL_POLICY_OVERRIDE` | Audit history for catalog availability decisions | `ToolVersionID`, `PrivilegesJSON`, `Reason`, `Reviewer`, `ApprovalReference`, `CreatedAt` |
+| `Agentic.AI_SCHEMA_MIGRATION` | Applied migration versions and checksums | `Version`, `Checksum`, `AppliedAt`, `DeploymentIdentity`, `Outcome` |
+
+### Where agents are registered
+
+An agent created in the web application is stored in `Agentic.MVP_AGENT`.
+
+- `ConfigJSON` contains the name, instructions, task, provider, model, enabled state, interval, and assigned tool bindings.
+- Each tool binding records `key`, `stable_key`, `contract_hash`, and optional fixed parameters.
+- `Revision` provides optimistic concurrency control for edits.
+- `ActiveRun` prevents more than one pending or active run for the same agent.
+- `NextDue` drives interval scheduling.
+
+When a run is created, the complete agent record is copied into `Agentic.MVP_RUN.SnapshotJSON`. Editing the agent later does not change the configuration already attached to that run.
+
+The broader `AI_*` schema contains foundation tables for future workflows, versioned agents, routines, findings, proposals, memory, and alerts. Those tables are not the active persistence path for the current MVP agent editor and worker unless explicitly listed above.
+
+### Useful SQL inspection queries
+
+Run these in the `AGENTIC` namespace with an authorized IRIS account:
+
+```sql
+-- Registered agents
+SELECT ID, Name, Revision, Enabled, IntervalSeconds, ActiveRun, UpdatedAt
+FROM Agentic.MVP_AGENT
+ORDER BY Name;
+
+-- Recent runs
+SELECT TOP 20 ID, AgentID, State, TriggerKind, Actor, CreatedAt, FinishedAt, ErrorCode
+FROM Agentic.MVP_RUN
+ORDER BY CreatedAt DESC;
+
+-- Evidence for one run
+SELECT ID, ToolKey, Outcome, ArgumentsJSON, ResultJSON, CreatedAt
+FROM Agentic.MVP_CALL
+WHERE RunID = ?
+ORDER BY CreatedAt, ID;
+
+-- Enabled SysAdmin operations
+SELECT StableKey, Method, PathTemplate, Classification, Risk, ContractHash
+FROM Agentic.AI_TOOL_VERSION
+WHERE Enabled = 1
+ORDER BY PathTemplate, Method;
+```
+
+## Security Model
+
+The application uses the authenticated IRIS WSGI security context. Application permissions are derived from IRIS roles.
+
+| IRIS role | Application capability |
+| --- | --- |
+| `AgenticViewer` | View agents, runs, reports, and the catalog |
+| `AgenticOperator` | View and run enabled agents |
+| `AgenticAgentDesigner` | View, create, edit, pause, enable, and run agents |
+| `AgenticDBAApprover` | Enable or block operations in the shared catalog |
+| `%All` | Mapped to application administrator capabilities |
+
+Startup also provisions restricted service identities:
+
+- `AgenticWorker` accesses the queue and MVP persistence tables.
+- `AgenticSysAdmin` calls the local SysAdmin API with the `AgenticSysAdminReader` role.
+
+Additional controls include same-origin CSRF tokens for writes, parameter validation against JSON Schema, fixed-parameter enforcement, availability rechecks immediately before dispatch, pinned contract hashes, response-size limits, disabled redirects, and evidence redaction for password-, secret-, token-, credential-, authorization-, and API-key-like fields.
 
 ## Requirements
 
 - Docker Engine with the Docker Compose plugin, or Docker Desktop with Compose enabled.
-- A source checkout of this project.
-- Enough memory for the IRIS Community container and the local Ollama model. The default model runs on CPU, but performance depends on available resources.
-- Network access to download the container images, Python dependencies during the image build, and the Ollama model.
+- A source checkout of this repository.
+- Network access during the first build and model download.
+- Sufficient memory for InterSystems IRIS Community and the selected model.
 
-## Install and Start
+The default model can run on CPU. Response time depends on available CPU, memory, and model size.
 
-Run the commands from the project root, where `docker-compose.yml` is located.
+## Installation: Local Ollama
 
-1. Create a local environment file. On Windows PowerShell:
+### 1. Create the environment file
 
-   ```powershell
-   Copy-Item .env.example .env
-   ```
+From the repository root:
 
-   On macOS, Linux, or a Unix shell:
+```powershell
+Copy-Item .env.example .env
+```
 
-   ```sh
-   cp .env.example .env
-   ```
+On macOS or Linux:
 
-2. Review `.env`. The defaults enable the local Ollama service, expose IRIS only on `127.0.0.1`, use port `52774`, and select `qwen2.5:3b`. Keep this deployment local unless you have separately configured secure network access and IRIS authentication.
+```sh
+cp .env.example .env
+```
 
-3. Build the application image and start IRIS and Ollama:
+### 2. Review the local configuration
 
-   ```sh
-   docker compose --profile local-llm up -d --build
-   ```
+The supplied defaults use:
 
-   The first build and startup can take several minutes. The startup script applies database migrations, creates the application roles and service identities, imports the SysAdmin contract, and starts the worker.
+```dotenv
+COMPOSE_PROFILES=local-llm
+AGENTIC_ENV=development
+AGENTIC_IRIS_PORT=52774
+AGENTIC_PROVIDER=ollama
+AGENTIC_OLLAMA_URL=http://ollama:11434
+AGENTIC_MODEL=qwen2.5:3b
+AGENTIC_SYSADMIN_URL=http://127.0.0.1:52773/api/admin
+AGENTIC_SYSADMIN_USER=
+AGENTIC_SYSADMIN_PASSWORD=
+```
 
-4. If `AGENTIC_PROVIDER=ollama`, download the configured model into the Ollama container:
+Empty SysAdmin credentials instruct startup to use the generated local gateway identity.
 
-   ```sh
-   docker compose exec ollama ollama pull qwen2.5:3b
-   ```
+### 3. Build and start the services
 
-   If you changed `AGENTIC_MODEL` in `.env`, pull that model identifier instead. OpenAI deployments do not need this step.
+```sh
+docker compose --profile local-llm up -d --build
+```
 
-5. Check that the services are running:
+Startup performs the following actions:
 
-   ```sh
-   docker compose ps
-   ```
+- Creates the `AGENTIC` database and namespace.
+- Configures the `/agentic` IRIS WSGI application.
+- Applies checksum-protected SQL migrations.
+- Creates application roles and restricted service identities.
+- Imports the pinned 276-operation SysAdmin contract.
+- Enables the reviewed read-only preset once on a new data volume.
+- Starts the supervised worker.
 
-   Wait for the `iris` service to report `healthy`. If startup fails, inspect its logs:
+### 4. Download the configured model
 
-   ```sh
-   docker compose logs --tail=100 iris
-   ```
+```sh
+docker compose exec ollama ollama pull qwen2.5:3b
+```
 
-6. Open the application at [http://localhost:52774/agentic/](http://localhost:52774/agentic/) and sign in with an IRIS account.
+Use the exact value of `AGENTIC_MODEL` if you selected another model.
 
-   For a fresh local InterSystems IRIS Community image, the development login is `_SYSTEM` with password `SYS`. This account has full administrative access: use it only for local development, do not expose the service publicly, and change the default password for any persistent environment.
+### 5. Verify readiness
 
-## Configure Access
+```sh
+docker compose ps
+docker compose logs --tail=100 iris
+```
 
-The first startup creates these IRIS roles and enables the reviewed read-only query preset once. Assign the DBA role to users through IRIS security administration:
+Wait until both services report `healthy`.
 
-| Role | Access |
-| --- | --- |
-| `AgenticViewer` | View agents, runs, and reports. |
-| `AgenticOperator` | View and run enabled agents. |
-| `AgenticAgentDesigner` | View, create, and edit agents; can also run them. |
-| `AgenticDBAApprover` | Enable or block operations in the shared tool catalog. Enabling a mutating operation authorizes automatic calls without per-run approval. |
+### 6. Open the application
 
-The default `_SYSTEM` development account has `%All` and therefore full access. The application is a shared workspace: authorized users see the same agents and reports. Use individual IRIS accounts and grant only the roles each person needs.
+Open [http://localhost:52774/agentic/](http://localhost:52774/agentic/).
 
-## Create and Run Your First Agent
+For a fresh local IRIS Community container, the development account is commonly `_SYSTEM` with password `SYS`. This account has full administrative access. Use it only on a local development deployment, change default credentials for persistent environments, and never expose this configuration directly to an untrusted network.
 
-1. Select **Create agent**.
-2. Enter a name, keep the default Ollama model or choose a model already downloaded in Ollama, and write the agent instructions.
-3. Describe one task in the task field. For example: “Check whether there are at least 50 locks, inspect the related processes, and summarize what you find.” Conditions in task text are interpreted by the model; they are not deterministic application rules.
-4. Select one or more available operations that provide the information or action the task needs. An agent must have between 1 and 12 tools. Optional fixed parameters must match the schema and cannot be changed by the model. Leave `{}` to set no fixed values.
-5. Leave the interval at `0` for manual runs, or choose `60` to `86400` seconds for recurring runs. Save the agent.
-6. Select **Run now**. When the run completes, select **View report** to inspect the summary, status, instructions used, tool calls, and evidence.
-7. Use **Pause** to prevent future scheduled runs. A run already in progress may finish.
+## Installation: OpenAI
 
-For a new deployment, the reviewed read-only queries are ready to assign. A DBA can expand **Tool availability and SysAdmin catalog** and use **Enable reviewed reads** to restore that set or **Block all** to close every operation. Search the catalog to inspect methods, descriptions, and parameters before enabling anything else. Enabling an operation allows assigned agents to invoke it automatically; POST/PUT/DELETE may change IRIS state. Blocking a tool prevents future dispatches, though a request already in flight may finish.
+Update `.env`:
 
-Prefer focused tasks and assign only the operations each agent needs. Treat model conclusions as assistance and verify evidence before taking further operational action.
+```dotenv
+AGENTIC_PROVIDER=openai
+AGENTIC_MODEL=gpt-4o-mini
+AGENTIC_OPENAI_API_KEY=replace-with-your-key
+# AGENTIC_OPENAI_BASE_URL=https://optional-compatible-endpoint/v1
+```
 
-## Configuration
-
-Settings are read by Docker Compose from `.env`. Defaults are also defined in `docker-compose.yml`.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `AGENTIC_IRIS_PORT` | `52774` | Host port for the local IRIS web application. It is bound to localhost. |
-| `COMPOSE_PROFILES` | `local-llm` | Enables the local Ollama service. The install command also selects this profile explicitly. |
-| `AGENTIC_PROVIDER` | `ollama` | Active deployment provider: `ollama` or `openai`. |
-| `AGENTIC_OLLAMA_URL` | `http://ollama:11434` | Ollama endpoint as seen from the IRIS container. |
-| `AGENTIC_MODEL` | `qwen2.5:3b` | Default model for the configured provider; it must be available from that provider. |
-| `AGENTIC_OPENAI_API_KEY` | Empty | OpenAI API key. Keep it only in local environment configuration. |
-| `AGENTIC_OPENAI_BASE_URL` | Empty | Optional base URL for an OpenAI-compatible endpoint. |
-| `AGENTIC_SYSADMIN_URL` | `http://127.0.0.1:52773/api/admin` | Server-side SysAdmin API target. |
-| `AGENTIC_SYSADMIN_USER` | Empty | Optional username for an externally configured SysAdmin target. |
-| `AGENTIC_SYSADMIN_PASSWORD` | Empty | Optional password for an externally configured SysAdmin target. |
-
-When the SysAdmin credentials are left empty, startup provisions a dedicated local gateway identity. That identity may not have privileges for every mutating operation. For a separate SysAdmin target, configure its URL and least-privilege credentials in `.env`; keep credentials out of source control. Enabling an operation does not grant additional privileges to the target identity.
-
-### Switch to OpenAI
-
-In `.env`, set `AGENTIC_PROVIDER=openai`, choose an OpenAI model such as `gpt-4o-mini` with `AGENTIC_MODEL`, and set `AGENTIC_OPENAI_API_KEY`. Optionally set `AGENTIC_OPENAI_BASE_URL` for an OpenAI-compatible endpoint. The API key is passed only to the IRIS server container and is never returned to the browser. Comment out `COMPOSE_PROFILES=local-llm` if Ollama is not needed, then rebuild/restart IRIS:
+Remove or comment out `COMPOSE_PROFILES=local-llm` if Ollama is not required, then rebuild the IRIS service:
 
 ```sh
 docker compose up -d --build iris
 ```
 
-All three settings (`AGENTIC_PROVIDER`, `AGENTIC_MODEL`, and `AGENTIC_OPENAI_API_KEY`) must match the selected provider. Existing agents use the deployment's configured provider; when their saved provider differs, the configured `AGENTIC_MODEL` is used.
+Provider settings are deployment-wide. Existing agents whose saved provider differs from the active deployment use the configured default model.
 
-## Stop and Restart
+## Configuration Reference
 
-Stop and remove the containers while preserving application data and downloaded models:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `COMPOSE_PROFILES` | `local-llm` | Starts the bundled Ollama service |
+| `AGENTIC_ENV` | `development` | Deployment environment label |
+| `AGENTIC_IRIS_PORT` | `52774` | Local host port for the IRIS web application |
+| `AGENTIC_PROVIDER` | `ollama` | Active provider: `ollama` or `openai` |
+| `AGENTIC_MODEL` | `qwen2.5:3b` | Default model identifier for the active provider |
+| `AGENTIC_OLLAMA_URL` | `http://ollama:11434` | Ollama endpoint visible from the IRIS container |
+| `AGENTIC_OPENAI_API_KEY` | empty | OpenAI credential; keep it only in local environment configuration |
+| `AGENTIC_OPENAI_BASE_URL` | empty | Optional OpenAI-compatible base URL |
+| `AGENTIC_SYSADMIN_URL` | `http://127.0.0.1:52773/api/admin` | Fixed server-side SysAdmin API target |
+| `AGENTIC_SYSADMIN_USER` | empty | Username for an external SysAdmin target |
+| `AGENTIC_SYSADMIN_PASSWORD` | empty | Password for an external SysAdmin target |
+
+For an external SysAdmin target, configure both credentials and grant only the privileges required by the enabled operations. Enabling an operation in the catalog does not grant privileges to the target identity.
+
+## First Agent
+
+1. Sign in with a user that has `AgenticAgentDesigner` or `%All`.
+2. Select **Create agent**.
+3. Enter a name, model, English instructions, and an English task.
+4. Select one or more enabled tools.
+5. Optionally add fixed parameters as JSON, for example `{"maxRows": 100}`.
+6. Keep the interval at `0` for manual execution or select an interval from 60 to 86,400 seconds.
+7. Save the agent and select **Run now**.
+8. Open **View report** after the run finishes.
+9. Compare every important report claim with the displayed tool evidence.
+
+Example instructions:
+
+```text
+You are a database operations analyst. Use only the assigned read-only tools.
+Report facts supported by tool evidence, identify limitations, and keep the response concise.
+```
+
+Example task:
+
+```text
+Inspect the current IRIS server information and produce a concise validation report.
+```
+
+## Operational Limits
+
+- One worker executes runs per deployment.
+- One run may be pending or active per agent.
+- Run timeout: 240 seconds.
+- Model iteration limit: 8.
+- Tool-call limit: 12 per run.
+- Tool assignment limit: 12 per agent.
+- GET responses with `maxRows` are restricted to 1 through 500.
+- Model-facing repeated list data is sampled to a maximum of 8 rows; persisted evidence remains bounded separately.
+- Runs interrupted by worker restart are marked failed and are not replayed.
+- Scheduled task conditions are interpreted by the model, not enforced as deterministic alert rules.
+
+Model-generated summaries may still contain mistakes. Evidence is the authoritative record.
+
+## Stop, Restart, and Data Retention
+
+Stop containers while preserving IRIS data and downloaded models:
 
 ```sh
 docker compose down
 ```
 
-Start the existing deployment again:
+Restart the local deployment:
 
 ```sh
 docker compose --profile local-llm up -d
 ```
 
-Docker volumes persist IRIS application data and Ollama models. **Do not use `docker compose down -v` unless you intend to permanently delete those volumes and their data.**
+The `agentic-data` and `ollama-models` volumes are persistent. Do not run `docker compose down -v` unless permanent deletion of agents, runs, evidence, configuration, and downloaded models is intended.
 
-## Limits and Safety
+## Development and Validation
 
-- One worker executes runs per deployment; a run is limited to 240 seconds, 8 model iterations, and 12 tool calls.
-- Each agent can use up to 12 tools. On initial setup, only 18 reviewed read-only operations are enabled; the remaining catalog stays blocked. A DBA-enabled operation is a shared standing authorization for automatic use by assigned agents, including schedules.
-- The current tool-level toggle does not ask for per-action approval. Be especially careful when enabling POST, PUT, or DELETE operations. The target's credentials still determine whether the operation succeeds.
-- Model output can be incomplete or incorrect. Verify report claims using the evidence shown in the run details.
-- The MVP does not provide vector memory, external notifications, write operations, or multi-instance coordination.
-- Task conditions are model-interpreted, not guaranteed rules or alerts.
-- The local Community login and localhost-bound port are development defaults, not a production security setup.
-
-## Run Tests
-
-Build the test image to run the Python test suite during the Docker build:
+Run the complete lint, formatting, and test pipeline through the test image:
 
 ```sh
 docker build --target test -t agentic-iris-tests .
 ```
 
-The project also includes runtime smoke and acceptance scripts under `scripts/`. The smoke test requires the corresponding IRIS and Ollama services and its documented environment credentials.
+The build validates the reviewed read-only manifest against the pinned contract and runs the Python test suite without requiring a host Python installation.
+
+Runtime smoke and acceptance scripts are available under `scripts/`. They require a running deployment and the credentials documented by each script.
+
+## Repository Map
+
+```text
+app/
+  api/                 Session, health, and foundation API routes
+  mvp/                 Agent validation, catalog, runtime, gateway, and repository
+  repositories/        IRIS SQL access
+frontend/              Web UI templates and static assets
+worker/                 Scheduler, runner, and supervisor
+migrations/            IRIS SQL schema migrations
+specification/         Pinned SysAdmin contract and reviewed-read manifest
+scripts/               Startup, readiness, smoke, and acceptance checks
+tests/                 Unit and API tests
+```
 
 ## Project References
 
 - [Development plan](DEVELOPMENT_PLAN.md)
 - [MVP implementation plan](docs/MVP_PLANO.md)
 - [MVP validation notes](docs/MVP_VALIDACAO.md)
-- [SysAdmin contract](specification/mainspec_v2.json)
-- [Reviewed read-only endpoints](specification/reviewed_read_operations.json)
+- [Compatibility notes](docs/compatibility.md)
+- [Pinned SysAdmin contract](specification/mainspec_v2.json)
+- [Reviewed read-only operations](specification/reviewed_read_operations.json)
+
+## License
+
+See [LICENSE](LICENSE).

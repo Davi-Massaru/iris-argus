@@ -223,10 +223,16 @@ class AgentRepository:
         with transaction():
             run = self.get_run(identifier)
             _sql("UPDATE Agentic.MVP_AGENT SET Revision=Revision WHERE ID=?", (run["agent_id"],))
-            _sql(
-                "UPDATE Agentic.MVP_RUN SET State=?,Report=?,ErrorCode=?,FinishedAt=? WHERE ID=? AND State='RUNNING'",
-                (state, report[:30000], error, now(), identifier),
-            )
+            if error is None:
+                _sql(
+                    "UPDATE Agentic.MVP_RUN SET State=?,Report=?,ErrorCode=NULL,FinishedAt=? WHERE ID=? AND State='RUNNING'",
+                    (state, report[:30000], now(), identifier),
+                )
+            else:
+                _sql(
+                    "UPDATE Agentic.MVP_RUN SET State=?,Report=?,ErrorCode=?,FinishedAt=? WHERE ID=? AND State='RUNNING'",
+                    (state, report[:30000], error, now(), identifier),
+                )
             _sql(
                 "UPDATE Agentic.MVP_AGENT SET ActiveRun=NULL WHERE ID=? AND ActiveRun=?",
                 (run["agent_id"], identifier),

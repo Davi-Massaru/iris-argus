@@ -1,11 +1,12 @@
 import copy
+import json
 import sys
 from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 from app import create_app
 from app.repositories.iris_repository import MemoryRepository
-from app.mvp.catalog import catalog, tool_by_key
+from app.mvp.catalog import catalog, load_reviewed_read_operations, tool_by_key
 from app.mvp.domain import validate_agent
 from app.mvp.gateway import Gateway, ToolError
 from app.mvp.runtime import execute, model_evidence, redact_sensitive, _remove_schema_examples
@@ -56,10 +57,43 @@ def test_contract_read_review_and_reference_resolution():
     items = catalog()
     assert len(items) == 276
     assert all(item['supported'] for item in items)
+    reviewed_reads = [item for item in items if item['default_read_only']]
+    assert len(reviewed_reads) == 18
+    assert all(item['method'] == 'GET' and not item['sensitive'] for item in reviewed_reads)
     assert sum(item['method'] == 'POST' and 'body' in item['schema']['properties'] for item in items) > 0
     assert tool_by_key('get_v2_process')['schema']['required'] == ['id']
     assert tool_by_key('get_v2_locks')['schema']['properties']['maxRows']['type'] == 'number'
     assert tool_by_key('post_v2_process_terminate')['method'] == 'POST'
+
+
+def test_external_read_manifest_is_pinned_and_rejects_mutating_or_sensitive_tools(tmp_path):
+    contract_hash = 'pinned-contract'
+    operation = {'method': 'GET', 'path': '/safe', 'supported': True, 'sensitive': False}
+    manifest_path = tmp_path / 'reviewed.json'
+
+    def write_manifest(entry, source_hash=contract_hash):
+        manifest_path.write_text(json.dumps({
+            'schema_version': 1,
+            'source_contract': 'mainspec_v2.json',
+            'source_sha256': source_hash,
+            'operations': [entry],
+        }), encoding='utf-8')
+
+    valid_entry = {'method': 'GET', 'path': '/safe', 'classification': 'READ_ONLY', 'reason': 'Reviewed read.'}
+    write_manifest(valid_entry)
+    assert load_reviewed_read_operations(manifest_path, contract_hash, [operation]) == {('GET', '/safe'): 'Reviewed read.'}
+
+    write_manifest(valid_entry, source_hash='stale-contract')
+    with pytest.raises(RuntimeError, match='does not match'):
+        load_reviewed_read_operations(manifest_path, contract_hash, [operation])
+
+    write_manifest({**valid_entry, 'method': 'POST'})
+    with pytest.raises(RuntimeError, match='READ_ONLY GET'):
+        load_reviewed_read_operations(manifest_path, contract_hash, [operation])
+
+    write_manifest(valid_entry)
+    with pytest.raises(RuntimeError, match='unsupported or sensitive'):
+        load_reviewed_read_operations(manifest_path, contract_hash, [{**operation, 'sensitive': True}])
 
 
 def test_evidence_compaction_preserves_count_and_processes_without_altering_original():
@@ -285,3 +319,35 @@ def test_tool_availability_toggle_requires_dba_csrf_and_acknowledgment():
     item = next(item for item in client.get('/api/mvp/catalog', environ_base=dba).get_json()['items'] if item['stable_key'] == operation['stable_key'])
     assert item['allowed'] is True
     assert repository.tools[0]['updated_by'] == 'dba'
+
+
+def test_reviewed_read_preset_is_dba_only_and_blocks_other_methods():
+    items = catalog()
+    repository = MemoryRepository()
+    repository.tools = [{
+        'stable_key': item['stable_key'],
+        'contract_hash': item['contract_hash'],
+        'enabled': False,
+    } for item in items]
+    client = create_app(repository, testing=True).test_client()
+    viewer = {'REMOTE_USER': 'reader', 'agentic.test.roles': 'AgenticViewer'}
+    dba = {'REMOTE_USER': 'dba', 'agentic.test.roles': 'AgenticDBAApprover'}
+    path = '/api/mvp/catalog/presets/reviewed-reads'
+
+    assert client.put(path, json={}, environ_base=viewer).status_code == 403
+    csrf = client.get('/api/v1/session', environ_base=dba).get_json()['csrf_token']
+    headers = {'X-Agentic-CSRF': csrf}
+    assert client.put(path, json={}, environ_base=dba).status_code == 403
+    enabled = client.put(path, json={}, headers=headers, environ_base=dba)
+    assert enabled.status_code == 200
+    assert enabled.get_json()['changed'] == 18
+
+    catalog_response = client.get('/api/mvp/catalog', environ_base=dba).get_json()['items']
+    assert sum(item['available'] for item in catalog_response) == 18
+    assert all(item['available'] for item in catalog_response if item['default_read_only'])
+    assert not any(item['available'] for item in catalog_response if item['method'] != 'GET')
+
+    blocked = client.put('/api/mvp/catalog/presets/block-all', json={}, headers=headers, environ_base=dba)
+    assert blocked.status_code == 200
+    assert blocked.get_json()['changed'] == 18
+    assert not any(tool['enabled'] for tool in repository.tools)

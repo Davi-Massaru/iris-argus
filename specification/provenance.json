@@ -4,5 +4,5 @@
   "retrieved_at": "2026-09-24T00:55:13Z",
   "sha256": "1ab154c7c5d9b25e6b227944a44a120c670686f876c2e14abfb9ee5898596650",
   "target_iris": "2026.2 Community Edition",
-  "review_state": "All imported operations begin UNKNOWN and disabled. Classification requires a separate reviewed activation."
+  "review_state": "The 18 operations listed in reviewed_read_operations.json are reviewed READ_ONLY defaults. They are enabled once on first setup; every other imported operation remains UNKNOWN and disabled. Docker runtime builds validate the manifest against this contract hash."
 }

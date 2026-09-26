@@ -2,7 +2,7 @@
 
 IRIS DBA Agents is a self-hosted MVP for configuring AI-assisted database administration tasks and reviewing their results. A DBA controls which operations from the pinned IRIS SysAdmin OpenAPI contract are available, then configures agents with instructions, tasks, an Ollama model, and selected available tools. Agents can call enabled operations and return reports with tool-call evidence.
 
-Every operation starts blocked. Enabling one is a standing authorization for assigned agents to invoke it automatically, including scheduled runs; there is no approval prompt for each call. A DBA is responsible for reviewing the operation and its consequences before enabling it. Task conditions are interpreted by a language model, so verify reports and evidence.
+On first startup, 18 explicitly reviewed read-only GET operations are enabled for quick use; all other operations start blocked. Enabling any additional operation is a standing authorization for assigned agents to invoke it automatically, including scheduled runs; there is no approval prompt for each call. A DBA is responsible for reviewing the operation and its consequences before enabling it. Task conditions are interpreted by a language model, so verify reports and evidence.
 
 ## What You Can Do
 
@@ -14,7 +14,9 @@ Every operation starts blocked. Enabling one is a standing authorization for ass
 - Review run status, the generated report, instructions used, tool calls, arguments, and returned evidence.
 - Use the reviewed SysAdmin catalog to see which operations are available to agents.
 
-The pinned contract contains 276 operations: GET, POST, PUT, DELETE, and HEAD. All start blocked. A DBA can enable any supported operation, including operations that change state; only enabled operations can be assigned to agents. Ollama is the default model provider; OpenAI can be selected through deployment settings. Agent task text is not executable code, and model interpretations should be checked against returned evidence.
+The pinned contract contains 276 operations: GET, POST, PUT, DELETE, and HEAD. The first startup enables only the 18 reviewed read-only queries; all other operations remain blocked. A DBA can enable any supported operation, including operations that change state; only enabled operations can be assigned to agents. Ollama is the default model provider; OpenAI can be selected through deployment settings. Agent task text is not executable code, and model interpretations should be checked against returned evidence.
+
+The default read set is maintained in [reviewed_read_operations.json](specification/reviewed_read_operations.json), separate from the upstream API contract. `docker compose build` checks its SHA-256 against the pinned contract and rejects unknown, unsupported, sensitive, duplicate, or non-GET entries before producing the runtime image.
 
 ## How It Works
 
@@ -88,7 +90,7 @@ Run the commands from the project root, where `docker-compose.yml` is located.
 
 ## Configure Access
 
-The first startup creates these IRIS roles. Assign them to users through IRIS security administration:
+The first startup creates these IRIS roles and enables the reviewed read-only query preset once. Assign the DBA role to users through IRIS security administration:
 
 | Role | Access |
 | --- | --- |
@@ -109,7 +111,7 @@ The default `_SYSTEM` development account has `%All` and therefore full access. 
 6. Select **Run now**. When the run completes, select **View report** to inspect the summary, status, instructions used, tool calls, and evidence.
 7. Use **Pause** to prevent future scheduled runs. A run already in progress may finish.
 
-Before creating agents, a DBA should expand **Tool availability and SysAdmin catalog**, search the operation, inspect its method, description, and parameters, then enable it. Enabling any operation allows agents assigned to it to invoke it automatically; POST/PUT/DELETE may change IRIS state. Blocking a tool prevents future dispatches, though a request already in flight may finish.
+For a new deployment, the reviewed read-only queries are ready to assign. A DBA can expand **Tool availability and SysAdmin catalog** and use **Enable reviewed reads** to restore that set or **Block all** to close every operation. Search the catalog to inspect methods, descriptions, and parameters before enabling anything else. Enabling an operation allows assigned agents to invoke it automatically; POST/PUT/DELETE may change IRIS state. Blocking a tool prevents future dispatches, though a request already in flight may finish.
 
 Prefer focused tasks and assign only the operations each agent needs. Treat model conclusions as assistance and verify evidence before taking further operational action.
 
@@ -161,7 +163,7 @@ Docker volumes persist IRIS application data and Ollama models. **Do not use `do
 ## Limits and Safety
 
 - One worker executes runs per deployment; a run is limited to 240 seconds, 8 model iterations, and 12 tool calls.
-- Each agent can use up to 12 tools. All 276 operations start blocked; a DBA-enabled operation is a shared standing authorization for automatic use by assigned agents, including schedules.
+- Each agent can use up to 12 tools. On initial setup, only 18 reviewed read-only operations are enabled; the remaining catalog stays blocked. A DBA-enabled operation is a shared standing authorization for automatic use by assigned agents, including schedules.
 - The current tool-level toggle does not ask for per-action approval. Be especially careful when enabling POST, PUT, or DELETE operations. The target's credentials still determine whether the operation succeeds.
 - Model output can be incomplete or incorrect. Verify report claims using the evidence shown in the run details.
 - The MVP does not provide vector memory, external notifications, write operations, or multi-instance coordination.
@@ -184,3 +186,4 @@ The project also includes runtime smoke and acceptance scripts under `scripts/`.
 - [MVP implementation plan](docs/MVP_PLANO.md)
 - [MVP validation notes](docs/MVP_VALIDACAO.md)
 - [SysAdmin contract](specification/mainspec_v2.json)
+- [Reviewed read-only endpoints](specification/reviewed_read_operations.json)

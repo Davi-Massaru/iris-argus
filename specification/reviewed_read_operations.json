@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "source_contract": "mainspec_v2.json",
+  "source_sha256": "1ab154c7c5d9b25e6b227944a44a120c670686f876c2e14abfb9ee5898596650",
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/info",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/locks",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/process",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/processes",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/dashboard/main",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/dashboard/ecp",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/dashboard/globals-and-routines",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/dashboard/system-resources",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/license-usage",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/system-usage",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/monitor/system-usage/shared-memory",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/task",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation; other methods on this path remain blocked."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/task/info",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/task/history",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/tasks",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/task/manager",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/task/upcoming",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    },
+    {
+      "method": "GET",
+      "path": "/v2/journal/files",
+      "classification": "READ_ONLY",
+      "reason": "Existing explicitly reviewed read-only diagnostic operation."
+    }
+  ]
+}

@@ -69,6 +69,30 @@ def set_tool_availability(stable_key):
     return jsonify(result)
 
 
+@bp.put('/catalog/presets/<preset>')
+@require_permission('approve')
+@require_csrf
+def apply_tool_preset(preset):
+    items = catalog()
+    if preset == 'reviewed-reads':
+        tools = [item for item in items if item['default_read_only']]
+        enabled = True
+        reason = 'Reviewed read-only operations enabled from the DBA catalog preset.'
+    elif preset == 'block-all':
+        tools = items
+        enabled = False
+        reason = 'All operations blocked from the DBA catalog preset.'
+    else:
+        return jsonify(error={'message': 'Unknown tool availability preset.'}), 404
+    changed = current_app.extensions['agentic_repository'].apply_tool_availability_preset(
+        tools=tools,
+        enabled=enabled,
+        actor=current_principal().name,
+        reason=reason,
+    )
+    return jsonify(preset=preset, changed=changed, enabled=enabled)
+
+
 @bp.get('/agents')
 @require_permission('view')
 def agents():

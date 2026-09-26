@@ -6,7 +6,8 @@ Plataforma para o DBA criar agentes. Instruções, tarefa e ferramentas são con
 
 ## Controles implementados
 
-- Catálogo de 276 operações do contrato fixado: GET, POST, PUT, DELETE e HEAD. Todas começam bloqueadas em `AI_TOOL_VERSION.Enabled`.
+- Catálogo de 276 operações do contrato fixado: GET, POST, PUT, DELETE e HEAD. No primeiro setup, 18 GETs revisados são habilitados uma vez; as demais operações começam bloqueadas em `AI_TOOL_VERSION.Enabled`.
+- Presets DBA: `Enable reviewed reads` habilita as 18 operações revisadas; `Block all` bloqueia o catálogo. O marcador de bootstrap impede que restarts sobrescrevam decisões posteriores do DBA.
 - `AgenticDBAApprover` pode habilitar ou bloquear operações na interface. Cada alteração persiste ator e decisão em `AI_TOOL_POLICY_OVERRIDE`.
 - Habilitar uma operação é autorização contínua para agentes atribuídos chamá-la automaticamente, inclusive em execuções agendadas; não há aprovação por chamada.
 - Atribuição exige disponibilidade ativa. O gateway revalida a disponibilidade antes da execução e novamente imediatamente antes do despacho.
@@ -29,7 +30,9 @@ Plataforma para o DBA criar agentes. Instruções, tarefa e ferramentas são con
 
 ## Verificação do fluxo de disponibilidade
 
-- `docker run --rm --entrypoint python3 agentic-iris-tests -m pytest -q`: 40 testes passaram.
+- `docker run --rm --entrypoint python3 agentic-iris-tests -m pytest -q`: 42 testes passaram.
+- `docker compose build`: passou com validação de `specification/reviewed_read_operations.json` contra o SHA-256 do contrato pinado.
+- API live após bootstrap: 276 operações no catálogo, 18 marcadas como defaults revisados e 18 habilitadas; nenhum não-GET liberado.
 - `docker build --target runtime -t agentic-iris-runtime .`: build concluído usando a imagem pinada do IRIS 2026.2.
 - A seleção do provider OpenAI é testada com um cliente mockado. O adapter real também foi instanciado offline com uma chave descartável; nenhuma chamada externa foi feita.
 - Os testes de gateway usam transporte falso. Nenhuma operação SysAdmin mutável foi enviada a um destino real nesta validação.

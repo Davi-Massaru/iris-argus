@@ -31,6 +31,38 @@ def _remove_examples(value):
     return value
 
 
+def load_reviewed_read_operations(path, contract_hash, operations):
+    manifest = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(manifest, dict) or manifest.get('schema_version') != 1:
+        raise RuntimeError('Unsupported reviewed-read manifest schema.')
+    if manifest.get('source_contract') != 'mainspec_v2.json' or manifest.get('source_sha256') != contract_hash:
+        raise RuntimeError('Reviewed-read manifest does not match the pinned SysAdmin contract.')
+    entries = manifest.get('operations')
+    if not isinstance(entries, list) or not entries:
+        raise RuntimeError('Reviewed-read manifest must contain operations.')
+
+    operation_index = {(item['method'], item['path']): item for item in operations}
+    reviewed = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise RuntimeError('Invalid reviewed-read manifest entry.')
+        method = entry.get('method')
+        route = entry.get('path')
+        reason = entry.get('reason')
+        if method != 'GET' or entry.get('classification') != 'READ_ONLY' or not isinstance(reason, str) or not reason.strip():
+            raise RuntimeError('Reviewed-read entries must be justified READ_ONLY GET operations.')
+        identity = (method, route)
+        if identity in reviewed:
+            raise RuntimeError(f'Duplicate reviewed-read operation: {method} {route}')
+        operation = operation_index.get(identity)
+        if operation is None:
+            raise RuntimeError(f'Reviewed-read operation is absent from the pinned contract: {method} {route}')
+        if not operation['supported'] or operation['sensitive']:
+            raise RuntimeError(f'Reviewed-read operation is unsupported or sensitive: {method} {route}')
+        reviewed[identity] = reason.strip()
+    return reviewed
+
+
 def resolve(value, document, seen=()):
     if isinstance(value, dict):
         if '$ref' in value:
@@ -102,8 +134,16 @@ def catalog():
             result.append(dict(key=key, method=method.upper(), path=path,
                                description=operation.get('summary', ''), schema=_remove_examples(schema),
                                stable_key=stable_key, supported=supported, allowed=False,
+                               default_read_only=False, review_reason=None,
                                sensitive=sensitive,
                                contract_hash=digest))
+    reviewed = load_reviewed_read_operations(
+        ROOT / 'specification/reviewed_read_operations.json', digest, result,
+    )
+    for item in result:
+        reason = reviewed.get((item['method'], item['path']))
+        item['default_read_only'] = reason is not None
+        item['review_reason'] = reason
     return result
 
 

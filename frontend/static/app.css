@@ -697,6 +697,47 @@ fieldset {
     font-weight: 600
 }
 
+.catalog-presets {
+    display: grid;
+    grid-template-columns: minmax(140px, .45fr) minmax(220px, 1fr) auto;
+    align-items: center;
+    gap: 12px 20px;
+    margin: 16px 20px 8px;
+    padding: 14px 16px;
+    border: 1px solid #b9dce6;
+    border-left: 3px solid var(--cyan);
+    border-radius: 4px;
+    background: #f3fafc;
+    color: var(--text);
+    font-size: 12px
+}
+
+.catalog-presets > span {
+    color: var(--muted);
+    line-height: 1.45
+}
+
+.catalog-preset-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px
+}
+
+.catalog-preset-actions button {
+    padding: 8px 11px;
+    font-size: 12px
+}
+
+.catalog-preset-actions #enable-reviewed-reads {
+    border-color: #78b9ce;
+    color: var(--brand-deep)
+}
+
+.catalog-preset-actions #block-all-tools {
+    border-color: #d8b4b0;
+    color: #9d241b
+}
+
 .catalog-search input {
     margin-bottom: 0
 }
@@ -857,6 +898,12 @@ summary {
 
     .catalog-search {
         margin: 8px 14px 14px
+    }
+
+    .catalog-presets {
+        grid-template-columns: 1fr;
+        margin: 14px 14px 8px;
+        gap: 7px
     }
 
     main {

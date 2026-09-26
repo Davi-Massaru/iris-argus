@@ -25,7 +25,7 @@ This document consolidates the referenced design and supplies implementation det
 | INV-01 | IMPLEMENT all application backend behavior in Python; expose the web backend through IRIS WSGI. |
 | INV-02 | PERSIST agents, prompts, tools, routines, watches, policies, memory, and execution history in IRIS tables. |
 | INV-03 | IMPORT SysAdmin tools from `specification/mainspec_v2.json`; do not hand-invent administrative endpoints. |
-| INV-04 | IMPORT all SysAdmin operations as disabled by default; execute only operations explicitly enabled by an authorized DBA and permitted by the target credentials. |
+| INV-04 | IMPORT all SysAdmin operations disabled; on first setup, enable only the explicitly reviewed read-only preset. Thereafter execute only operations enabled by an authorized DBA and permitted by target credentials. |
 | INV-05 | REQUIRE an Action Proposal and explicit DBA approval for managed SQL and application behavior changes. For a pinned SysAdmin API operation, an explicit DBA availability toggle is standing authorization for assigned agents to invoke it automatically, including scheduled runs; no per-call approval is required. |
 | INV-06 | EXECUTE the exact approved action. Do not regenerate arguments with an LLM after approval. |
 | INV-07 | REVALIDATE permissions, target identity, contract, expiry, and current resource state immediately before mutation. |
@@ -90,7 +90,7 @@ No custom ObjectScript business layer is required. IRIS-generated persistence cl
 4. CAPTURE method, path template, operation ID, descriptions, parameter locations, serialization rules, request media types, response schemas, and declared security requirements.
 5. CREATE immutable tool versions. Use a stable key from source identity, method, and path when operation IDs are absent or duplicated.
 6. CLASSIFY semantics. Set new or uncertain operations to UNKNOWN and disabled pending review. HTTP verb and summary text are classification hints, not proof.
-7. KEEP every imported operation disabled. For this deployment's SysAdmin catalog, a `DBAApprover` may enable a pinned operation through the availability control; persist the actor and decision. Preserve previous versions for historical runs.
+7. KEEP every imported operation disabled except the versioned first-setup preset of explicitly reviewed READ_ONLY operations. For this deployment's SysAdmin catalog, a `DBAApprover` may also use the availability control or presets; persist the actor and decision. Preserve previous versions for historical runs.
 8. ON REIMPORT, generate a change report. Invalidate affected pending approvals. Never silently preserve READ_ONLY classification after semantic changes.
 
 The registry SHALL remain traceable to `specification/mainspec_v2.json`. Do not manually maintain a competing endpoint catalog. Required privileges not declared by the source SHALL be recorded as reviewed policy metadata, with evidence from the deployed system.
@@ -99,7 +99,7 @@ The registry SHALL remain traceable to `specification/mainspec_v2.json`. Do not 
 
 | Classification | Behavior |
 |---|---|
-| READ_ONLY | Starts blocked; execute automatically only when a DBA has enabled the pinned operation and the target authorizes it. |
+| READ_ONLY | Starts blocked except for the explicit first-setup reviewed-read preset; execute automatically only when enabled and the target authorizes it. |
 | MUTATION | Starts blocked; a DBA may explicitly enable it as standing authorization for automatic calls. There is no per-run approval prompt. |
 | UNKNOWN | Starts blocked. Never auto-enable on import; execution requires an explicit DBA availability toggle and a supported request shape. |
 
@@ -372,7 +372,7 @@ module.xml              # IPM package metadata, if delivered
 | P6 — Watches | Add durable schedules, findings, alert lifecycle, deduplication, outbox, and monitoring freshness. | A watch detects a seeded condition and produces an approval-gated remediation proposal. | R8–R10 |
 | P7 — Release | Complete GUI, compatibility report, Docker/IPM artifacts, README, demo, and restore tests. | Reproducible installation and end-to-end demonstration. | R11, R12 |
 
-Do not enable managed SQL or other proposal-gated mutation execution before P3 passes. SysAdmin operations use the standing DBA toggle in Section 5.2, with explicit automatic-execution warnings and a default-blocked state. Prioritize a complete read–finding–alert flow over unsupported breadth. Maintain a coverage matrix for web applications, permissions, security/secrets, tasks, operating-system resources, and logs; mark unsupported operations explicitly.
+Do not enable managed SQL or other proposal-gated mutation execution before P3 passes. SysAdmin operations use the standing DBA toggle in Section 5.2, with explicit automatic-execution warnings; only the reviewed-read preset is enabled at first setup. Prioritize a complete read–finding–alert flow over unsupported breadth. Maintain a coverage matrix for web applications, permissions, security/secrets, tasks, operating-system resources, and logs; mark unsupported operations explicitly.
 
 ## 18. ACCEPTANCE AND SECURITY TESTS
 

@@ -22,7 +22,8 @@ COPY --chown=irisowner:irisowner . .
 RUN chmod +x /opt/agentic/scripts/startup.sh
 
 ENV PYTHONPATH=/opt/agentic:/usr/irissys/mgr/python
-RUN iris start IRIS && \
+RUN python3 -c "from app.mvp.catalog import catalog; items = catalog(); print('REVIEWED_READ_MANIFEST_OK operations=' + str(sum(item['default_read_only'] for item in items)))" && \
+    iris start IRIS && \
     iris merge IRIS /opt/agentic/merge.cpf && \
     iris session IRIS < /opt/agentic/iris.script > /tmp/agentic-build.log && \
     cat /tmp/agentic-build.log && \

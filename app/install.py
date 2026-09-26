@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from app.mvp.catalog import catalog
 from app.repositories.iris_repository import _rows, _sql
 from app.tools.importer import load_contract
 
@@ -148,6 +149,49 @@ def _import_contract() -> int:
     return len(contract.operations)
 
 
+def _seed_reviewed_read_defaults() -> int:
+    version = 'mvp-reviewed-read-defaults-v1'
+    if _rows('SELECT Version FROM Agentic.AI_SCHEMA_MIGRATION WHERE Version = ?', (version,)):
+        return 0
+
+    defaults = [item for item in catalog() if item['default_read_only']]
+    checksum = hashlib.sha256('\n'.join(sorted(item['stable_key'] for item in defaults)).encode('utf-8')).hexdigest()
+    _sql('START TRANSACTION')
+    try:
+        for item in defaults:
+            rows = _rows(
+                'SELECT ID FROM Agentic.AI_TOOL_VERSION WHERE StableKey = ? AND ContractHash = ?',
+                (item['stable_key'], item['contract_hash']),
+            )
+            if not rows:
+                raise RuntimeError(f"Reviewed read tool was not imported: {item['method']} {item['path']}")
+            tool_version_id = rows[0][0]
+            _sql(
+                "UPDATE Agentic.AI_TOOL_VERSION SET Classification = 'READ_ONLY',Risk = 'LOW',Enabled = 1 WHERE ID = ?",
+                (tool_version_id,),
+            )
+            _sql(
+                'INSERT INTO Agentic.AI_TOOL_POLICY_OVERRIDE '
+                '(ID,ToolVersionID,Classification,PrivilegesJSON,ScopeRulesJSON,Reason,Reviewer,ApprovalReference,CreatedAt) '
+                'VALUES (?,?,?,?,?,?,?,?,?)',
+                (
+                    str(uuid4()), tool_version_id, 'READ_ONLY',
+                    json.dumps({'availability': 'AVAILABLE', 'method': 'GET'}),
+                    '{}', 'Reviewed read-only operation enabled by the deployment default.',
+                    'system-bootstrap', version, datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        _sql(
+            'INSERT INTO Agentic.AI_SCHEMA_MIGRATION (Version,Checksum,AppliedAt,DeploymentIdentity,Outcome) VALUES (?,?,?,?,?)',
+            (version, checksum, datetime.now(timezone.utc).isoformat(), 'system-bootstrap', 'SUCCEEDED'),
+        )
+        _sql('COMMIT')
+    except BaseException:
+        _sql('ROLLBACK')
+        raise
+    return len(defaults)
+
+
 def setup() -> None:
     import iris
 
@@ -162,6 +206,7 @@ def setup() -> None:
         _configure_worker()
         _configure_mvp_security()
         count = _import_contract()
-        print(f"AGENTIC_INSTALL_OK operations={count}")
+        enabled_reads = _seed_reviewed_read_defaults()
+        print(f"AGENTIC_INSTALL_OK operations={count} default_reads_enabled={enabled_reads}")
     finally:
         iris.system.Process.SetNamespace(previous)

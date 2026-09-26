@@ -23,8 +23,9 @@ function parameterEntries(schema,prefix=""){
 }
 function updateToolPicker(){
   const rows=[...$("tool-picker").children],query=$("tool-search").value.trim().toLowerCase();let visible=0,selected=0;
+  const available=rows.filter(row=>row.dataset.available==="true").length;
   for(const row of rows){const match=!query||row.dataset.search.includes(query);row.hidden=!match;if(match&&row.dataset.available==="true")visible++;if(row.dataset.available==="true"&&row.querySelector('input[type="checkbox"]').checked)selected++;}
-  $("tool-result-count").textContent=query?`${visible} of ${rows.length} available tools`:`${rows.length} available tools`;
+  $("tool-result-count").textContent=query?`${visible} of ${available} available tools`:`${available} available tools`;
   $("tool-selection-count").textContent=`${selected} of 12 selected`;
   $("tool-selection-count").classList.toggle("at-limit",selected===12);
   if(!rows.length)$("tool-empty").textContent="No tools are available. Ask a DBA to enable operations in the catalog.";
@@ -64,6 +65,7 @@ function renderCatalog(){
   $("catalog-list").replaceChildren();
   $("catalog-count").textContent=catalog.length;
   $("catalog-available-count").textContent=`${catalog.filter(tool=>tool.available).length} enabled`;
+  $("reviewed-read-count").textContent=catalog.filter(tool=>tool.default_read_only).length;
   for(const tool of catalog){
     const row=node("tr","");row.dataset.search=`${tool.method} ${tool.path} ${tool.description||""}`.toLowerCase();
     row.append(node("td",tool.method),node("td",tool.path),node("td",tool.description||"No description in source contract."),node("td",!tool.supported?"Unsupported":tool.available?"Enabled":"Blocked",!tool.supported?"unknown":tool.available?"availability-on":"availability-off"));
@@ -99,6 +101,18 @@ async function setToolAvailability(tool,checkbox){
     await loadCatalog();notify(`${tool.method} ${tool.path} ${enabled?"enabled":"blocked"}.`);
   }catch(error){checkbox.checked=!enabled;notify(error.message,true);}
 }
+async function applyToolPreset(preset){
+  const enableReviewedReads=preset==="reviewed-reads";
+  const prompt=enableReviewedReads
+    ? `Enable the ${catalog.filter(tool=>tool.default_read_only).length} reviewed read-only operations? They will be available to assigned agents, including scheduled runs.`
+    : `Block all ${catalog.length} operations? Agents currently assigned blocked operations will not be able to call them.`;
+  if(!window.confirm(prompt))return;
+  try{
+    const result=await api(`/api/mvp/catalog/presets/${preset}`,"PUT",{});
+    await loadCatalog();
+    notify(`${result.changed} operations ${enableReviewedReads?"enabled":"blocked"}.`);
+  }catch(error){notify(error.message,true);}
+}
 function renderAgents(){
   $("agent-count").textContent=agents.length;
   $("agent-list").replaceChildren();
@@ -120,6 +134,8 @@ function openEditor(agent=null){
 }
 $("tool-search").addEventListener("input",updateToolPicker);
 $("catalog-search").addEventListener("input",filterCatalog);
+$("enable-reviewed-reads").addEventListener("click",()=>applyToolPreset("reviewed-reads"));
+$("block-all-tools").addEventListener("click",()=>applyToolPreset("block-all"));
 $("tool-picker").addEventListener("change",event=>{
   if(!event.target.matches('input[type="checkbox"]'))return;
   const selected=$("tool-picker").querySelectorAll('input[type="checkbox"]:checked').length;
@@ -152,7 +168,7 @@ async function refresh(){
 }
 $("new-agent").addEventListener("click",()=>openEditor());$("close-editor").addEventListener("click",()=>$("editor").hidden=true);$("close-detail").addEventListener("click",()=>{$("run-detail").hidden=true;detailId=null;});$("refresh").addEventListener("click",()=>refresh().catch(e=>notify(e.message,true)));
 async function init(){
-  const session=await api("/api/v1/session");token=session.csrf_token;permissions=session.roles;$("new-agent").disabled=!canDesign();
+  const session=await api("/api/v1/session");token=session.csrf_token;permissions=session.roles;$("new-agent").disabled=!canDesign();$("catalog-presets").hidden=!canManageTools();
   await loadCatalog();
   await refresh();setInterval(()=>refresh().catch(e=>notify(e.message,true)),5000);
 }

@@ -15,7 +15,23 @@
 <label>Agent instructions<textarea id="prompt" rows="3" maxlength="6000" required placeholder="Define the agent's role, context, and how it should report results."></textarea></label>
 <label>Task / skill<textarea id="task" rows="4" maxlength="6000" required placeholder="Describe what to query, which conditions to evaluate, and what report to produce."></textarea></label>
 <div class="form-grid"><label>Interval in seconds (0 = manual only)<input id="interval" type="number" min="0" max="86400" value="0" required></label><label class="check"><input id="enabled" type="checkbox" checked> Enabled</label></div>
-<fieldset><legend>Allowed tools</legend><p>Select up to 12 queries. Fixed parameters are optional and cannot be changed by the agent.</p><div id="tool-picker"></div></fieldset>
+<fieldset class="tool-fieldset"><legend>Choose approved queries</legend>
+<p class="tool-intro">Search the reviewed SysAdmin API queries and select only the data your agent needs. You can assign up to 12 queries.</p>
+<div class="tool-method-guide" aria-label="HTTP method guide">
+<div><span class="method-badge get">GET</span><span>Read or retrieve data</span></div>
+<div><span class="method-badge post">POST</span><span>Create or start an action</span></div>
+<div><span class="method-badge put">PUT / PATCH</span><span>Update data</span></div>
+<div><span class="method-badge delete">DELETE</span><span>Remove data</span></div>
+</div>
+<p class="tool-policy"><strong>Available in this MVP:</strong> 18 reviewed GET queries. POST, PUT, PATCH, DELETE, and other unreviewed operations are blocked.</p>
+<p class="tool-source"><a href="https://github.com/intersystems-community/sysadmin-api-specification/blob/master/mainspec_v2.json" target="_blank" rel="noopener noreferrer">View the SysAdmin API specification</a><span>Operation names, descriptions, and parameters below come from this contract.</span></p>
+<div class="tool-browser-toolbar">
+<label for="tool-search">Search approved queries<input id="tool-search" type="search" placeholder="Try locks, processes, /v2/task, or maxRows"></label>
+<div class="tool-selection-summary"><span id="tool-result-count" role="status" aria-live="polite">Loading approved queries...</span><span id="tool-selection-count" aria-live="polite">0 of 12 selected</span></div>
+</div>
+<div id="tool-picker" class="tool-list"></div>
+<p id="tool-empty" class="tool-empty" hidden>No approved queries match this search.</p>
+</fieldset>
 <div class="actions"><button type="submit" id="save-agent">Save agent</button><span>Instructions and configuration are stored in IRIS.</span></div>
 </form></section>
 <section class="panel"><div class="panel-heading"><h3>Runs and reports</h3><span class="pill safe">Read-only</span></div><div class="table-wrap"><table><thead><tr><th>Agent</th><th>Started</th><th>Status</th><th>Details</th></tr></thead><tbody id="run-list"></tbody></table></div></section>

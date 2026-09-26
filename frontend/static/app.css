@@ -387,31 +387,287 @@ fieldset {
     border-radius: 4px
 }
 
+.tool-fieldset {
+    padding: 18px 20px 20px
+}
+
+.tool-fieldset legend {
+    padding: 0 6px;
+    font-size: 15px;
+    font-weight: 650
+}
+
+.tool-intro {
+    margin: 0 0 16px;
+    line-height: 1.5
+}
+
+.tool-method-guide {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #f8fafb
+}
+
+.tool-method-guide > div {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    padding: 11px 12px;
+    color: var(--muted);
+    font-size: 12px
+}
+
+.tool-method-guide > div + div {
+    border-left: 1px solid var(--line)
+}
+
+.method-badge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 3px 7px;
+    border: 1px solid;
+    border-radius: 3px;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2
+}
+
+.method-badge.get {
+    border-color: #91c9dd;
+    background: #eaf7fb;
+    color: #07527a
+}
+
+.method-badge.post {
+    border-color: #e9c98e;
+    background: #fff8e9;
+    color: #794600
+}
+
+.method-badge.put {
+    border-color: #9dd8c9;
+    background: #eaf8f4;
+    color: #17614e
+}
+
+.method-badge.delete {
+    border-color: #e9b5b0;
+    background: #fff2f0;
+    color: #9d241b
+}
+
+.tool-policy {
+    margin: 14px 0 8px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5
+}
+
+.tool-source {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    margin: 0;
+    font-size: 12px
+}
+
+.tool-source a {
+    color: var(--brand);
+    font-weight: 600
+}
+
+.tool-source span {
+    color: var(--muted)
+}
+
+.tool-browser-toolbar {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 20px 0 10px
+}
+
+.tool-browser-toolbar > label {
+    flex: 1;
+    max-width: 560px;
+    margin: 0;
+    font-weight: 600
+}
+
+.tool-browser-toolbar input {
+    margin-bottom: 0
+}
+
+.tool-selection-summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 16px;
+    padding-bottom: 12px;
+    color: var(--muted);
+    font-size: 12px
+}
+
+#tool-selection-count {
+    color: var(--brand-deep);
+    font-weight: 650
+}
+
+#tool-selection-count.at-limit {
+    color: var(--amber)
+}
+
 #tool-picker {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    max-height: 500px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    max-height: 580px;
     overflow: auto;
-    padding: 8px
+    padding: 2px 3px 8px
 }
 
 .tool-option {
-    padding: 14px;
-    background: #f4f8fa;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr);
+    align-items: center;
+    gap: 14px 22px;
+    padding: 15px;
     border: 1px solid var(--line);
-    border-radius: 4px
+    border-left: 3px solid #9cccdc;
+    border-radius: 4px;
+    background: #ffffff
 }
 
-.tool-option small {
-    display: block;
+.tool-main {
+    min-width: 0
+}
+
+.tool-option-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px
+}
+
+.tool-select {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 9px;
+    min-width: 0;
+    margin: 0;
+    cursor: pointer
+}
+
+.tool-select input {
+    flex: 0 0 auto;
+    margin: 3px 0 0;
+    accent-color: var(--brand)
+}
+
+.tool-path {
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 650
+}
+
+.tool-description {
+    margin: 8px 0 0;
     color: var(--muted);
-    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.45
+}
+
+.tool-parameters {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px
+}
+
+.tool-parameter {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 7px;
+    border-top: 1px solid #edf1f3
+}
+
+.tool-parameter-details {
+    min-width: 0
+}
+
+.tool-parameter-name {
+    color: var(--text);
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 650
+}
+
+.tool-parameter-description {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35
+}
+
+.parameter-type {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 10px;
+    text-align: right
+}
+
+.parameter-type.required {
+    color: var(--brand-deep)
+}
+
+.tool-fixed-field {
+    min-width: 0
+}
+
+.tool-fixed-field:empty {
+    display: none
+}
+
+.tool-fixed-label {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 650
+}
+
+.tool-fixed-label textarea {
+    min-height: 64px;
+    margin-top: 6px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px
+}
+
+.tool-fixed-field > small {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
     overflow-wrap: anywhere
 }
 
-.tool-option label:last-child {
-    margin-bottom: 0
+.tool-empty {
+    margin: 0;
+    padding: 18px;
+    border: 1px dashed #b9cbd6;
+    color: var(--muted);
+    text-align: center
 }
 
 pre {
@@ -478,6 +734,41 @@ summary {
 
     .hero h2 {
         font-size: 26px
+    }
+
+    .tool-fieldset {
+        padding: 14px 12px
+    }
+
+    .tool-method-guide {
+        grid-template-columns: repeat(2, minmax(0, 1fr))
+    }
+
+    .tool-method-guide > div:nth-child(3) {
+        border-left: 0;
+        border-top: 1px solid var(--line)
+    }
+
+    .tool-method-guide > div:nth-child(4) {
+        border-top: 1px solid var(--line)
+    }
+
+    .tool-browser-toolbar {
+        display: block
+    }
+
+    .tool-browser-toolbar > label {
+        max-width: none
+    }
+
+    .tool-selection-summary {
+        justify-content: space-between;
+        padding: 10px 0 0
+    }
+
+    .tool-option {
+        grid-template-columns: 1fr;
+        gap: 14px
     }
 
     main {

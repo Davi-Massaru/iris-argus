@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor DBA
+    participant Web as Browser and Flask
+    participant DB as IRIS SQL
+    participant Worker as irispython worker
+    participant Model as Model
+    participant Gate as Gateway
+    participant Admin as SysAdmin API
+    DBA->>Web: Save agent and select Run now
+    Web->>DB: Save configuration and QUEUED snapshot
+    Web-->>DBA: Run ID, HTTP 202
+    Worker->>DB: Claim oldest queued run as RUNNING
+    Worker->>Model: Instructions, task, and assigned tool schemas
+    loop Until report or execution limit
+        Model-->>Worker: Tool name and arguments
+        Worker->>Gate: Execute requested call
+        Gate->>DB: Check operation availability
+        Gate->>Admin: Validated HTTP request
+        Admin-->>Gate: Result
+        Gate-->>Worker: Result or handled error
+        Worker->>DB: Store MVP_CALL and evidence ID
+        Worker->>Model: ToolMessage with evidence
+    end
+    Worker->>DB: Save final state and release ActiveRun
+    DBA->>Web: Open report
+    Web->>DB: Read snapshot, report, and calls

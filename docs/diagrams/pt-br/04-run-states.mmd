@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> QUEUED: Solicitação manual ou scheduler
+    QUEUED --> RUNNING: Worker assume execução
+    QUEUED --> CANCELLED: Agente pausado antes de iniciar
+    RUNNING --> SUCCEEDED: Relatório e evidência bem-sucedida, sem falhas
+    RUNNING --> PARTIAL: Relatório com chamadas bem-sucedidas e falhas
+    RUNNING --> FAILED: Erro, limite ou interrupção

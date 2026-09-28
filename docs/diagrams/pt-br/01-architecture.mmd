@@ -1,0 +1,14 @@
+flowchart LR
+    Browser["Navegador<br/>HTML, CSS, JavaScript"] <-->|HTTP e JSON| Web
+    subgraph IRIS["Contêiner InterSystems IRIS"]
+        Web["IRIS WSGI /agentic<br/>Flask e autenticação nativa"]
+        DB[("Namespace AGENTIC<br/>Schema SQL Agentic")]
+        Worker["irispython<br/>Scheduler e processo executor"]
+        Gateway["Gateway Python<br/>jsonschema e requests"]
+        API["SysAdmin API<br/>/api/admin"]
+        Web <-->|iris.sql.exec| DB
+        Worker <-->|Fila, snapshots e evidências| DB
+        Worker --> Gateway
+        Gateway <-->|Requisições HTTP validadas| API
+    end
+    Worker <-->|Mensagens e chamadas via LangChain| LLM["Ollama ou OpenAI"]

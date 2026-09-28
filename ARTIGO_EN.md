@@ -8,7 +8,7 @@ The implementation combines Flask hosted by IRIS WSGI, Embedded Python, IRIS SQL
 
 This article follows the development of that workflow, from the browser request to the persisted report. The practical examples cover journal and memory inspection, lock investigation, and integration with an ObjectScript task.
 
-![Registered agents and recent runs](docs/screenshots/dashboard.png)
+![Registered agents and recent runs](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/dashboard.png)
 
 ## 1. Architecture: hosting the application in IRIS
 
@@ -16,22 +16,7 @@ The web application, database, and worker run inside the InterSystems IRIS Commu
 
 The diagram shows the default deployment, where the SysAdmin target is the same IRIS instance:
 
-```mermaid
-flowchart LR
-    Browser["Browser<br/>HTML, CSS, JavaScript"] <-->|HTTP and JSON| Web
-    subgraph IRIS["InterSystems IRIS container"]
-        Web["IRIS WSGI /agentic<br/>Flask and native authentication"]
-        DB[("AGENTIC namespace<br/>Agentic SQL schema")]
-        Worker["irispython<br/>Scheduler and execution process"]
-        Gateway["Python gateway<br/>jsonschema and requests"]
-        API["SysAdmin API<br/>/api/admin"]
-        Web <-->|iris.sql.exec| DB
-        Worker <-->|Queue, snapshots, evidence| DB
-        Worker --> Gateway
-        Gateway <-->|Validated HTTP requests| API
-    end
-    Worker <-->|LangChain messages and tool calls| LLM["Ollama or OpenAI"]
-```
+![IRIS DBA Agents architecture and component communication](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/diagrams/en/01-architecture.png)
 
 Application persistence uses `iris.sql.exec()` through Embedded Python. Administrative operations use HTTP with a server-configured target and credentials. The model receives instructions, tool schemas, and results. SQL access and gateway credentials remain under application control.
 
@@ -109,7 +94,7 @@ The contract hash is part of the identity. Updating the contract therefore requi
 
 Operations enter the database blocked. First setup enables **18 reviewed GET operations** from [reviewed_read_operations.json](specification/reviewed_read_operations.json). A marker in `AI_SCHEMA_MIGRATION` preserves subsequent DBA decisions across restarts.
 
-![SysAdmin catalog and availability controls](docs/screenshots/sysadmin-catalog.png)
+![SysAdmin catalog and availability controls](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/sysadmin-catalog.png)
 
 The DBA can enable or block individual supported operations, enable the reviewed-read preset, or block the entire catalog. The reviewed-read preset preserves other enabled operations. `AI_TOOL_POLICY_OVERRIDE` records the actor, reason, and timestamp of policy changes.
 
@@ -125,35 +110,7 @@ The operational workflow uses three tables from [migrations/002_mvp.sql](migrati
 | `Agentic.MVP_RUN` | Agent snapshot, state, trigger, actor, timestamps, report, and error |
 | `Agentic.MVP_CALL` | Tool, arguments, result, outcome, and timestamp for each recorded call |
 
-```mermaid
-erDiagram
-    MVP_AGENT ||--o{ MVP_RUN : has
-    MVP_RUN ||--o{ MVP_CALL : records
-    MVP_AGENT {
-        varchar ID PK
-        varchar ConfigJSON
-        int Revision
-        int IntervalSeconds
-        double NextDue
-        varchar ActiveRun
-    }
-    MVP_RUN {
-        varchar ID PK
-        varchar AgentID FK
-        varchar SnapshotJSON
-        varchar State
-        varchar Report
-        varchar ErrorCode
-    }
-    MVP_CALL {
-        varchar ID PK
-        varchar RunID FK
-        varchar ToolKey
-        varchar ArgumentsJSON
-        varchar ResultJSON
-        varchar Outcome
-    }
-```
+![Agent, run, and tool-call data model](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/diagrams/en/02-data-model.png)
 
 `AgentID` and `RunID` are foreign keys. Tool assignments reside in configuration JSON with their fixed parameters, `stable_key`, and `contract_hash`. The catalog uses `AI_TOOL`, `AI_TOOL_VERSION`, and `AI_TOOL_POLICY_OVERRIDE`.
 
@@ -161,7 +118,7 @@ Relational columns support queries and queue coordination. JSON stores variable 
 
 Each queued run receives a configuration snapshot. Later edits preserve the saved snapshot through repository behavior. Database administrators retain their table privileges.
 
-![Agent registrations queried through SQL](docs/screenshots/sql-registered-agents.png)
+![Agent registrations queried through SQL](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/sql-registered-agents.png)
 
 ### Revision checks and transactions
 
@@ -196,11 +153,11 @@ def _sql(statement: str, params: tuple[Any, ...] = ()):
 
 The editor captures the agent name, instructions, task, model, interval, enabled state, and tools. Domain validation accepts one to 12 distinct tools and validates fixed parameters against their schemas. The interval is `0` for manual execution or 60–86,400 seconds for scheduled execution.
 
-![Agent configuration editor](docs/screenshots/agent-configuration.png)
+![Agent configuration editor](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/agent-configuration.png)
 
 Available operations can be selected and assigned fixed JSON parameters. When editing an agent, previously assigned operations that have since been blocked remain visible with selection disabled.
 
-![Tool selection and fixed parameters](docs/screenshots/create-agent.png)
+![Tool selection and fixed parameters](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/create-agent.png)
 
 ### Browser and Flask API
 
@@ -230,34 +187,7 @@ def create():
 
 The execution endpoint returns HTTP `202` with the queued run ID. The worker processes it asynchronously. Subsequent detail requests return its current state, saved snapshot, report, and calls.
 
-```mermaid
-sequenceDiagram
-    actor DBA
-    participant Web as Browser and Flask
-    participant DB as IRIS SQL
-    participant Worker as irispython worker
-    participant Model as Model
-    participant Gate as Gateway
-    participant Admin as SysAdmin API
-    DBA->>Web: Save agent and select Run now
-    Web->>DB: Save configuration and QUEUED snapshot
-    Web-->>DBA: Run ID, HTTP 202
-    Worker->>DB: Claim oldest queued run as RUNNING
-    Worker->>Model: Instructions, task, and assigned tool schemas
-    loop Until report or execution limit
-        Model-->>Worker: Tool name and arguments
-        Worker->>Gate: Execute requested call
-        Gate->>DB: Check operation availability
-        Gate->>Admin: Validated HTTP request
-        Admin-->>Gate: Result
-        Gate-->>Worker: Result or handled error
-        Worker->>DB: Store MVP_CALL and evidence ID
-        Worker->>Model: ToolMessage with evidence
-    end
-    Worker->>DB: Save final state and release ActiveRun
-    DBA->>Web: Open report
-    Web->>DB: Read snapshot, report, and calls
-```
+![Agent execution sequence from the browser to persisted evidence](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/diagrams/en/03-execution-sequence.png)
 
 ### LangChain and model providers
 
@@ -281,7 +211,7 @@ messages = [
 
 Each run permits eight model interactions and 12 tool calls. A nonempty report with at least one successful call finishes as `SUCCEEDED` when no tool failures were recorded, or `PARTIAL` when successful and failed calls coexist. These states describe execution outcomes; reviewing the evidence establishes whether a conclusion is supported.
 
-![Run history with successful, partial, and failed executions](docs/screenshots/runs-overview.png)
+![Run history with successful, partial, and failed executions](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/runs-overview.png)
 
 ## 6. Gateway validation and dispatch
 
@@ -359,11 +289,11 @@ messages.append(
 
 For a response containing a list under `result`, `model_evidence()` sends up to eight rows, the returned row count, and a truncation indicator. Rows containing `Pid` also produce counts by process. SQL retains the redacted result accepted by the gateway, within its size limits. Counts describe the filtered, bounded response.
 
-![Report and recorded tool sequence](docs/screenshots/report-evidence.png)
+![Report and recorded tool sequence](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/report-evidence.png)
 
 The runtime appends evidence IDs omitted from the report before saving it. `ArgumentsJSON` stores the requested arguments after redaction and size handling; the snapshot stores fixed parameters; the gateway adds defaults. Reconstructing the effective request requires these three sources.
 
-![Tool arguments and returned evidence](docs/screenshots/tool-evidence-detail.png)
+![Tool arguments and returned evidence](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/tool-evidence-detail.png)
 
 The following query joins agents, runs, and calls in the `AGENTIC` namespace:
 
@@ -384,7 +314,7 @@ JOIN Agentic.MVP_CALL c ON c.RunID = r.ID
 ORDER BY c.CreatedAt DESC, c.ID;
 ```
 
-![Persisted evidence queried through SQL](docs/screenshots/sql-tool-evidence.png)
+![Persisted evidence queried through SQL](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/sql-tool-evidence.png)
 
 ## 8. Authentication and authorization
 
@@ -417,19 +347,11 @@ The scheduler selects up to 20 enabled agents with a positive interval, overdue 
 
 The deployment runs one worker and one execution subprocess at a time. The worker claims the oldest `QUEUED` run, starts `worker/run_agent.py` with `irispython`, checks the subprocess every two seconds, and terminates it after 240 seconds.
 
-```mermaid
-stateDiagram-v2
-    [*] --> QUEUED: Manual request or scheduler
-    QUEUED --> RUNNING: Worker claims run
-    QUEUED --> CANCELLED: Agent paused before execution
-    RUNNING --> SUCCEEDED: Report and successful evidence, no tool failures
-    RUNNING --> PARTIAL: Report with successful and failed calls
-    RUNNING --> FAILED: Error, limit, or interruption
-```
+![Run states, scheduling, and failure transitions](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/diagrams/en/04-run-states.png)
 
 Pausing blocks new enqueue operations. The worker cancels a queued run when it finds the agent paused; a run already executing may finish. On restart, recovery marks remaining `RUNNING` rows as `FAILED` with `WORKER_RESTARTED` and leaves administrative calls unreplayed.
 
-![Run snapshots and states queried through SQL](docs/screenshots/sql-agent-runs.png)
+![Run snapshots and states queried through SQL](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/sql-agent-runs.png)
 
 The supervisor terminates remaining process groups before recovery and bounds restart attempts. Readiness requires a startup marker and a heartbeat less than 20 seconds old, updated after a successful SQL query. Model availability is established during provider calls.
 
@@ -518,7 +440,7 @@ This JSON is the scheduling and tools portion of the agent payload. The editor s
 
 The README records revision **1** completing as **Succeeded** on **September 26, 2026, at 3:17:36 PM**, in browser-local time. All three calls succeeded. The journal response contained four files with `Size` values of **1,048,576**, **229,376**, **372,736**, and **69,632 bytes**.
 
-![Saved sentinel report](docs/screenshots/sentinel-report.png)
+![Saved sentinel report](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/sentinel-report.png)
 
 | Tool | Recorded evidence ID |
 | --- | --- |
@@ -526,7 +448,7 @@ The README records revision **1** completing as **Succeeded** on **September 26,
 | `get_v2_monitor_dashboard_system_resources` | `7cd2cf3c-59a3-453c-ba1d-c3f079b33d3f` |
 | `get_v2_monitor_system_usage_shared_memory` | `5cbfc298-5447-46ca-aee9-798bbe23d728` |
 
-![Sentinel recommendations and three successful calls](docs/screenshots/sentinel-evidence.png)
+![Sentinel recommendations and three successful calls](https://raw.githubusercontent.com/Davi-Massaru/iris-argus/refs/heads/master/docs/screenshots/sentinel-evidence.png)
 
 These values describe the documented demonstration instance. Review the returned units, workload, and query limits when interpreting a new run. A zero-valued memory category requires workload context. Growth assessment requires measurements from multiple times; capacity assessment requires sufficient storage data.
 

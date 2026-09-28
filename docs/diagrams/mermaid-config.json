@@ -1,0 +1,29 @@
+{
+  "theme": "neutral",
+  "securityLevel": "strict",
+  "fontFamily": "Arial, sans-serif",
+  "themeVariables": {
+    "fontSize": "18px"
+  },
+  "flowchart": {
+    "htmlLabels": false,
+    "curve": "linear",
+    "nodeSpacing": 40,
+    "rankSpacing": 55,
+    "useMaxWidth": false
+  },
+  "sequence": {
+    "useMaxWidth": false,
+    "wrap": true,
+    "diagramMarginX": 30,
+    "diagramMarginY": 25,
+    "messageFontSize": 17,
+    "actorFontSize": 17
+  },
+  "er": {
+    "useMaxWidth": false
+  },
+  "state": {
+    "useMaxWidth": false
+  }
+}

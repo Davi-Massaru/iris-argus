@@ -1,0 +1,27 @@
+erDiagram
+    MVP_AGENT ||--o{ MVP_RUN : possui
+    MVP_RUN ||--o{ MVP_CALL : registra
+    MVP_AGENT {
+        varchar ID PK
+        varchar ConfigJSON
+        int Revision
+        int IntervalSeconds
+        double NextDue
+        varchar ActiveRun
+    }
+    MVP_RUN {
+        varchar ID PK
+        varchar AgentID FK
+        varchar SnapshotJSON
+        varchar State
+        varchar Report
+        varchar ErrorCode
+    }
+    MVP_CALL {
+        varchar ID PK
+        varchar RunID FK
+        varchar ToolKey
+        varchar ArgumentsJSON
+        varchar ResultJSON
+        varchar Outcome
+    }

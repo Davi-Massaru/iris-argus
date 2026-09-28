@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor DBA
+    participant Web as Navegador e Flask
+    participant DB as IRIS SQL
+    participant Worker as Worker irispython
+    participant Model as Modelo
+    participant Gate as Gateway
+    participant Admin as SysAdmin API
+    DBA->>Web: Salvar agente e selecionar Run now
+    Web->>DB: Salvar configuração e snapshot QUEUED
+    Web-->>DBA: ID da execução, HTTP 202
+    Worker->>DB: Assumir item mais antigo como RUNNING
+    Worker->>Model: Instruções, tarefa e schemas atribuídos
+    loop Até o relatório ou limite de execução
+        Model-->>Worker: Nome da ferramenta e argumentos
+        Worker->>Gate: Executar chamada solicitada
+        Gate->>DB: Verificar disponibilidade da operação
+        Gate->>Admin: Requisição HTTP validada
+        Admin-->>Gate: Resultado
+        Gate-->>Worker: Resultado ou erro tratado
+        Worker->>DB: Gravar MVP_CALL e ID de evidência
+        Worker->>Model: ToolMessage com evidência
+    end
+    Worker->>DB: Salvar estado final e liberar ActiveRun
+    DBA->>Web: Abrir relatório
+    Web->>DB: Consultar snapshot, relatório e chamadas
